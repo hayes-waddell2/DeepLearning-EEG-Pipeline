@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=tuh-eeg-download
 #SBATCH --account=eeg-cnn-lstm
+#SBATCH --partition=sporc-cpu
 #SBATCH --output=/shared/rc/eeg-cnn-lstm/download_%j.log
 #SBATCH --time=24:00:00
 #SBATCH --ntasks=1
