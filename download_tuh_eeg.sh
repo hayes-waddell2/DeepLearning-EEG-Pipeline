@@ -1,4 +1,4 @@
-#!/bin/bash -1
+#!/bin/bash -l
 #SBATCH --job-name=tuh-eeg-download
 #SBATCH --account=eeg-cnn-lstm
 #SBATCH --partition=debug
