@@ -9,6 +9,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 
+. /tools/spack/share/spack/setup-env.sh
 spack load rsynch@3.2.7
 
 rsync -auvxL -e "ssh -i ~/.ssh/id_ed25519_tuh" \
