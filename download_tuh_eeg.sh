@@ -8,8 +8,7 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=4G
 
-
-
-/usr/bin/rsync -auvxL -e "ssh -i ~/.ssh/id_ed25519_tuh" \
+which rsync
+rsync -auvxL -e "ssh -i ~/.ssh/id_ed25519_tuh" \
     nedc-tuh-eeg@www.isip.piconepress.com:data/tuh_eeg/tuh_eeg_abnormal/v3.0.1 \
     /shared/rc/eeg-cnn-lstm/data/
