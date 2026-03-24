@@ -10,7 +10,7 @@
 #SBATCH --mem=4G
 
 . /tools/spack/share/spack/setup-env.sh
-spack load rsync@3.2.7
+spack load /a7736r2
 
 rsync -auvxL -e "ssh -i ~/.ssh/id_ed25519_tuh" \
     nedc-tuh-eeg@www.isip.piconepress.com:data/tuh_eeg/tuh_eeg_abnormal/v3.0.1 \
