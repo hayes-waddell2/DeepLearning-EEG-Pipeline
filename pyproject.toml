@@ -1,0 +1,36 @@
+[project]
+name = "eeg-cnn-lstm"
+dynamic = ["version"]
+description = "EEG abnormality classification using CNN-LSTM"
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+keywords = []
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "black",
+    "flake8",
+    "numpy<2",
+    "torch",
+    "mne",
+    "scipy",
+    "matplotlib",
+    "pytest",
+    "loguru",
+    "scikit-learn",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools_scm]
+version_file = "src/eeg_cnn_lstm/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
