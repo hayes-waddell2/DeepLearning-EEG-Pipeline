@@ -1,0 +1,4 @@
+data:
+  raw_data_path: /shared/rc/eeg-cnn-lstm/data/tuh_eeg_abnormal
+  processed_data_path: /shared/rc/eeg-cnn-lstm/data/processed
+
