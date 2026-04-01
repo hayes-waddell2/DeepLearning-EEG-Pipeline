@@ -9,17 +9,21 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = [
-    "black",
-    "flake8",
+dependencies = [                  # CHANGED: removed black, flake8, pytest — those are dev only
     "numpy<2",
     "torch",
     "mne",
     "scipy",
     "matplotlib",
-    "pytest",
     "loguru",
     "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "pytest",
 ]
 
 [build-system]
@@ -34,3 +38,7 @@ version_file = "src/eeg_cnn_lstm/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
