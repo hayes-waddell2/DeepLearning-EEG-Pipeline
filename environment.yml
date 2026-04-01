@@ -1,0 +1,19 @@
+name: eeg-env
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - scikit-learn
+  - mne
+  - pyyaml
+  - pip:
+    - torch
+    - torchvision
+    - pytest
+    - flake8
