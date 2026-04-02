@@ -2,7 +2,6 @@
 # Unit tests for the preprocessing module.
 
 import pytest
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 from src.eeg_cnn_lstm.preprocessing.preprocess import load_config, load_edf
 

@@ -47,7 +47,7 @@ def load_edf(edf_path):
 # values if not provided on the command line.
 #
 # @return argparse.Namespace Parsed arguments.
-def parse_args():  # CHANGED: --input and --output are now optional
+def parse_args():
     parser = argparse.ArgumentParser(description="Preprocess EEG .edf files")
     parser.add_argument("--config", default="config.yaml", help="Path to config file")
     parser.add_argument(
@@ -69,13 +69,16 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    input_path = Path(args.input)
-    output_path = Path(args.output)
+    # Use CLI args if provided, otherwise fall back to config.yaml
+    input_path = Path(args.input if args.input else config["data"]["raw_data_path"])
+    output_path = Path(
+        args.output if args.output else config["data"]["processed_data_path"]
+    )
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: add filtering and montage steps after load is verified
     if input_path.is_file():
-        raw = load_edf(input_path)
+        load_edf(input_path)
     elif input_path.is_dir():
         edf_files = list(input_path.rglob("*.edf"))
         print(f"Found {len(edf_files)} .edf files")
