@@ -1,4 +1,4 @@
 data:
-  raw_data_path: /shared/rc/eeg-cnn-lstm/data/v3.0.1/edf
-  processed_data_path: /shared/rc/eeg-cnn-lstm/data/processed
+  raw_data_path: /shared/rc/eeg-cnn-lstm/data/raw-datasets/tuab/v3.0.1/edf
+  processed_data_path: /shared/rc/eeg-cnn-lstm/data/processed-datasets
 
