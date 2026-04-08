@@ -157,9 +157,7 @@ def main():
     print(f" Split: {sample['split']}")
     print(f" Sfreq: {sample['sfreq']} Hz")
     print(f" Channels: {sample['n_channels']}")
-    print(
-        f" Duration: {sample['duration_sec']:.1f} seconds ({sample['duration_min']:.1f} minutes)"
-    )
+    print(f" Duration: {sample['duration_sec']:.1f}s ({sample['duration_min']:.1f}m)")
 
 
 if __name__ == "__main__":
