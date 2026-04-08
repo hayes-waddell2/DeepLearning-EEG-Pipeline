@@ -143,7 +143,7 @@ def main():
 
     # --- Channel Name Consistency ---
     section("Channel Names")
-    unique_montages = Counter(m["ch_names"] for m in metadata)
+    unique_montages = Counter(tuple(m["ch_names"]) for m in metadata)
     print(f" Unique channel montages: {len(unique_montages)}")
     print(f"\n Most common montages ({unique_montages.most_common(1)[0][1]} files):")
     for ch in unique_montages.most_common(1)[0][0]:
