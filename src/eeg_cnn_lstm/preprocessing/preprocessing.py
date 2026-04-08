@@ -41,6 +41,29 @@ def load_edf(edf_path):
     return raw
 
 
+## Applies notch and high-pass filters to a raw EEG recording.
+#
+# Notch filter removes US power line noise at 60 Hz. 
+# High-pass filter attenuates slow drift below 0.3 Hz.
+# Both filters are applied in-place using MNE's default FIR filter design.
+#
+# @param raw mne.io.Raw Preloaded raw EEG object (modified in-place).
+# @param notch_freq float Notch filter frequency in Hz (default: 60.0).
+# @param highpass_freq float High-pass cutoff frequency in Hz (default: 0.3).
+# @return mne.io.Raw The filtered raw object (same object, modified in-place).
+def filter_raw(raw, notch_freq=60.0, highpass_freq=0.3):
+    print(f"Applying notch filter at {notch_freq} Hz")
+    raw.notch_filter(notch_freq, verbose=False)
+
+    print(f"Applying high-pass filter at {highpass_freq} Hz")
+    raw.filter(
+        l_freq=highpass_freq,
+        h_freq=None,
+        verbose=False,
+    )
+    return raw
+
+
 ## Parses command-line arguments for the preprocessing script.
 #
 # Input and output paths are optional and fall back to config.yaml
@@ -78,12 +101,14 @@ def main():
 
     # TODO: add filtering and montage steps after load is verified
     if input_path.is_file():
-        load_edf(input_path)
+        raw = load_edf(input_path)
+        filter_raw(raw)
     elif input_path.is_dir():
         edf_files = list(input_path.rglob("*.edf"))
         print(f"Found {len(edf_files)} .edf files")
         for edf_file in edf_files:
-            load_edf(edf_file)
+            raw = load_edf(edf_file)
+            filter_raw(raw)
     else:
         raise FileNotFoundError(f"Input path not found: {input_path}")
 
