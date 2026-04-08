@@ -21,7 +21,7 @@ dependencies = [                  # CHANGED: removed black, flake8, pytest — t
 
 [project.optional-dependencies]
 dev = [
-    "black",
+    "black==24.2.0",
     "flake8",
     "pytest",
 ]
