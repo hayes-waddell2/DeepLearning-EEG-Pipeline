@@ -43,7 +43,7 @@ def load_edf(edf_path):
 
 ## Applies notch and high-pass filters to a raw EEG recording.
 #
-# Notch filter removes US power line noise at 60 Hz. 
+# Notch filter removes US power line noise at 60 Hz.
 # High-pass filter attenuates slow drift below 0.3 Hz.
 # Both filters are applied in-place using MNE's default FIR filter design.
 #

@@ -1,6 +1,7 @@
 # debug_filter_check.py  — run this manually on one file to verify
 import mne
 import matplotlib
+
 matplotlib.use("Agg")  # non-interactive backend for headless server
 import matplotlib.pyplot as plt
 from eeg_cnn_lstm.preprocessing.preprocessing import load_edf, filter_raw
