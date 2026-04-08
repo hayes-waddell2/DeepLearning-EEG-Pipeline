@@ -5,10 +5,15 @@ import pytest
 import numpy as np
 import mne
 from unittest.mock import patch, MagicMock
-from src.eeg_cnn_lstm.preprocessing.preprocessing import filter_raw, load_config, load_edf
+from src.eeg_cnn_lstm.preprocessing.preprocessing import (
+    filter_raw,
+    load_config,
+    load_edf,
+)
 
 
 # ===== Helpers =======
+
 
 def make_synthetic_raw(freqs, sfreq=250.0, duration=10.0, amplitude=1.0):
     """Create a single-channel Raw object containing sinusoids at the given frequencies.
@@ -41,6 +46,7 @@ def band_power(raw, fmin, fmax):
 
 # ====== Tests for load_config =======
 
+
 ## Tests that load_config correctly reads a YAML file.
 def test_load_config(tmp_path):
     # Write a minimal config file to a temp location
@@ -59,6 +65,7 @@ def test_load_config_missing_file():
 
 
 # ====== Tests for load_edf =======
+
 
 ## Tests that load_edf returns an MNE Raw object with expected attributes.
 def test_load_edf_returns_raw(tmp_path):
@@ -79,6 +86,7 @@ def test_load_edf_returns_raw(tmp_path):
 
 
 # ====== filter_raw tests ======
+
 
 ## Tests that the notch filter reduces 60 Hz power by at least 99%.
 def test_notch_filter_attenuates_60hz():
@@ -120,4 +128,3 @@ def test_filter_raw_custom_params():
     # Should not raise with custom notch and highpass values
     result = filter_raw(raw, notch_freq=50.0, highpass_freq=1.0)
     assert result is raw
-
