@@ -7,6 +7,8 @@
 import mne
 import yaml
 import argparse
+import numpy as np
+import csv
 from pathlib import Path
 
 
@@ -214,6 +216,76 @@ def apply_common_average_montage(raw):
     return raw
 
 
+## Segments a continuous raw EEG recording into fixed-length epochs with 50% overlap.
+#
+# Uses MNE's make_fixed_length_epochs to create non-overlapping or overlapping
+# windows. At 250 Hz, a 10-second window produces epochs of shape (19, 2500).
+#
+# @param raw mne.io.Raw Preprocessed raw EEG object.
+# @param window_sec float Epoch length in seconds (default: 10.0).
+# @param overlap_sec float Overlap between consecutive epochs in seconds (default: 5.0).
+# @return mne.Epochs Fixed-length epochs object.
+def segment_raw(raw, window_sec=10.0, overlap_sec=5.0):
+    print(
+        f"Segmenting raw data into {window_sec}-second epochs with {overlap_sec}-second overlap"
+    )
+    epochs = mne.make_fixed_length_epochs(
+        raw,
+        duration=window_sec,
+        overlap=overlap_sec,
+        preload=True,
+        verbose=False,
+    )
+    print(f"  Created {len(epochs)} epochs of shape {epochs.get_data().shape}")
+    return epochs
+
+
+## Extracts the binary label from a TUH EEG Abnormal Corpus file path.
+#
+# The corpus encodes the label in the directory structure:
+#   edf/train/normal/...  -> 0
+#   edf/train/abnormal/.. -> 1
+#
+# @param edf_path Path Path to the .edf file.
+# @return int 0 for normal, 1 for abnormal.
+# @throws ValueError If neither 'normal' nor 'abnormal' appears in the path.
+def extract_label(edf_path):
+    parts = Path(edf_path).parts
+    if "abnormal" in parts:
+        return 1
+    elif "normal" in parts:
+        return 0
+    else:
+        raise ValueError(f"Cannot determine label from path: {edf_path}")
+
+
+## Saves segmented EEG epochs to disk as a NumPy array and returns a manifest row.
+#
+# Writes a single .npy file per recording containing all epochs:
+#   - <stem>_epochs.npy : float64 array of shape (n_epochs, n_channels, n_timepoints)
+#
+# Returns a metadata dict to be aggregated into the split manifest CSV by the caller.
+#
+# @param epochs mne.Epochs Segmented epochs object from segment_raw().
+# @param edf_file Path Path to the original .edf file, used to derive the output filename.
+# @param output_path Path Directory where the .npy file will be written.
+# @param label int Binary label for the recording (0=normal, 1=abnormal).
+# @return dict Row dict with keys: filename, label, n_epochs, sfreq.
+def save_epochs(epochs, edf_file, out_path, label):
+    data = epochs.get_data()  # Shape: (n_epochs, n_channels, n_times)
+    stem = edf_file.stem
+    npy_file = out_path / f"{stem}_epochs.npy"
+    np.save(npy_file, data)
+    print(f"Saved epochs to {npy_file}")
+
+    return {
+        "filename": npy_file.name,
+        "label": label,
+        "n_epochs": len(epochs),
+        "sfreq": epochs.info["sfreq"],
+    }
+
+
 ## Parses command-line arguments for the preprocessing script.
 #
 # Input and output paths are optional and fall back to config.yaml
@@ -236,8 +308,16 @@ def parse_args():
 
 ## Entry point for the preprocessing pipeline.
 #
-# Loads config and input EEG file(s), applies preprocessing,
-# and saves results to the specified output directory.
+# Loads config and resolves input/output paths from CLI args or config.yaml.
+# Detects the dataset split (train or eval) from the input path and writes
+# all processed epochs to the corresponding split subdirectory.
+#
+# For each .edf file, applies the full preprocessing pipeline:
+# load -> clean channels -> remove non-EEG -> select 10-20 -> filter
+# -> resample -> average reference -> segment -> save
+#
+# After all files are processed, writes a manifest CSV to the output root
+# mapping each saved .npy file to its label, epoch count, and sampling rate.
 def main():
     args = parse_args()
     config = load_config(args.config)
@@ -249,6 +329,10 @@ def main():
     )
     output_path.mkdir(parents=True, exist_ok=True)
 
+    split = "train" if "train" in input_path.parts else "eval"
+    split_output = output_path / split
+    split_output.mkdir(parents=True, exist_ok=True)
+
     if input_path.is_file():
         edf_files = [input_path]
     elif input_path.is_dir():
@@ -257,6 +341,7 @@ def main():
     else:
         raise FileNotFoundError(f"Input path not found: {input_path}")
 
+    manifest_rows = []
     for edf_file in edf_files:
         raw = load_edf(edf_file)
         raw = clean_channel_names(raw)
@@ -265,11 +350,19 @@ def main():
         raw = filter_raw(raw)
         raw = resample_raw(raw)
         raw = apply_common_average_montage(raw)
-        # TODO: segments = segment_raw(raw)
+        epochs = segment_raw(raw)
+        label = extract_label(edf_file)
+        row = save_epochs(epochs, edf_file, split_output, label)
+        manifest_rows.append(row)
 
-    out_file = output_path / (edf_file.stem + "preprocessed.fif")
-    raw.save(out_file, overwrite=True)
-    print(f"Saved preprocessed file: {out_file}")
+    manifest_path = output_path / f"{split}_manifest.csv"
+    with open(manifest_path, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["filename", "label", "n_epochs", "sfreq"]
+        )
+        writer.writeheader()
+        writer.writerows(manifest_rows)
+    print(f"Saved manifest to {manifest_path}")
 
 
 if __name__ == "__main__":
