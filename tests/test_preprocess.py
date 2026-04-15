@@ -227,7 +227,7 @@ def test_notch_filter_attenuates_60hz():
 
 ## Tests that the high-pass filter reduces sub-0.3 Hz drift power by at least 99%.
 def test_highpass_filter_attenuates_slow_drift():
-    raw = make_synthetic_raw(freqs=[0.1])
+    raw = make_synthetic_raw(freqs=[0.1], duration=120.0)  # Longer duration to better capture low frequencies
     power_before = band_power(raw, fmin=0.05, fmax=0.2)
     filter_raw(raw)
     power_after = band_power(raw, fmin=0.05, fmax=0.2)
