@@ -180,6 +180,40 @@ def filter_raw(raw, notch_freq=60.0, highpass_freq=0.3):
     return raw
 
 
+## Resamples raw EEG data to a target sampling frequency.
+#
+# Skips resampling if the recording is already at the target rate.
+# Default target is 250 Hz, matching the majority of TUH recordings.
+#
+# @param raw mne.io.Raw Preloaded raw EEG object.
+# @param target_sfreq float Target sampling frequency in Hz (default: 250.0).
+# @return mne.io.Raw The resampled raw object.
+def resample_raw(raw, target_sfreq=250.0):
+    current_sfreq = raw.info["sfreq"]
+
+    if current_sfreq == target_sfreq:
+        print(f"Sampling rate already at {target_sfreq} Hz, skipping resampling")
+        return raw
+
+    print(f"Resampling from {current_sfreq} Hz to {target_sfreq} Hz")
+    raw.resample(target_sfreq, verbose=False)
+    return raw
+
+
+## Applies a common average montage to the EEG recording.
+#
+# Subtracts the mean signal across all channels from each channel.
+# Should be called after resampling and channel selection so that
+# only the 19 standard 10-20 channels contribute to the average.
+#
+# @param raw mne.io.Raw Preloaded raw EEG object.
+# @return mne.io.Raw The re-referenced raw object.
+def apply_common_average_montage(raw):
+    print("Applying common average montage")
+    raw.set_eeg_reference(ref_channels="average", verbose=False)
+    return raw
+
+
 ## Parses command-line arguments for the preprocessing script.
 #
 # Input and output paths are optional and fall back to config.yaml
@@ -215,18 +249,27 @@ def main():
     )
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # TODO: add filtering and montage steps after load is verified
     if input_path.is_file():
-        raw = load_edf(input_path)
-        filter_raw(raw)
+        edf_files = [input_path]
     elif input_path.is_dir():
         edf_files = list(input_path.rglob("*.edf"))
         print(f"Found {len(edf_files)} .edf files")
-        for edf_file in edf_files:
-            raw = load_edf(edf_file)
-            filter_raw(raw)
     else:
         raise FileNotFoundError(f"Input path not found: {input_path}")
+
+    for edf_file in edf_files:
+        raw = load_edf(edf_file)
+        raw = clean_channel_names(raw)
+        raw = remove_non_eeg_channels(raw)
+        raw = select_1020_channels(raw)
+        raw = filter_raw(raw)
+        raw = resample_raw(raw)
+        raw = apply_common_average_montage(raw)
+        # TODO: segments = segment_raw(raw)
+
+    out_file = output_path / (edf_file.stem + "preprocessed.fif")
+    raw.save(out_file, overwrite=True)
+    print(f"Saved preprocessed file: {out_file}")
 
 
 if __name__ == "__main__":
