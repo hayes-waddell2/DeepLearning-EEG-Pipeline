@@ -227,7 +227,8 @@ def apply_common_average_montage(raw):
 # @return mne.Epochs Fixed-length epochs object.
 def segment_raw(raw, window_sec=10.0, overlap_sec=5.0):
     print(
-        f"Segmenting raw data into {window_sec}-second epochs with {overlap_sec}-second overlap"
+        f"Segmenting raw data into {window_sec}-second epochs"
+        f"with {overlap_sec}-second overlap"
     )
     epochs = mne.make_fixed_length_epochs(
         raw,
@@ -262,12 +263,15 @@ def extract_label(edf_path):
 ## Saves segmented EEG epochs to disk as a NumPy array and returns a manifest row.
 #
 # Writes a single .npy file per recording containing all epochs:
-#   - <stem>_epochs.npy : float64 array of shape (n_epochs, n_channels, n_timepoints)
+#   - <stem>_epochs.npy : float64 array of shape
+#     (n_epochs, n_channels, n_timepoints)
 #
-# Returns a metadata dict to be aggregated into the split manifest CSV by the caller.
+# Returns a metadata dict to be aggregated into the split manifest CSV
+# by the caller.
 #
 # @param epochs mne.Epochs Segmented epochs object from segment_raw().
-# @param edf_file Path Path to the original .edf file, used to derive the output filename.
+# @param edf_file Path Path to the original .edf file, used to derive
+#     the output filename.
 # @param output_path Path Directory where the .npy file will be written.
 # @param label int Binary label for the recording (0=normal, 1=abnormal).
 # @return dict Row dict with keys: filename, label, n_epochs, sfreq.
