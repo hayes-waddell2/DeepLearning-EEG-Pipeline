@@ -4,7 +4,6 @@
 import pytest
 import numpy as np
 import mne
-import csv
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from src.eeg_cnn_lstm.preprocessing.preprocessing import (
