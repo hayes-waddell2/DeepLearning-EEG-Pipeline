@@ -41,6 +41,122 @@ def load_edf(edf_path):
     return raw
 
 
+## Standardizes EEG channel names by stripping common EDF prefixes and suffixes.
+#
+# Removes "EEG " prefixes and "-REF" suffixes that appear in many EDF recordings,
+# then applies title-case capitalization to match the standard 10-20 naming
+# convention (e.g., "EEG FP1-REF" becomes "Fp1").
+#
+# @param raw mne.io.Raw Preloaded raw EEG object (modified in-place).
+# @return mne.io.Raw The raw object with renamed channels.
+def clean_channel_names(raw):
+    print("Cleaning channel names")
+
+    cleaned_names = {}
+
+    for ch in raw.ch_names:
+        new_ch = ch
+
+        # Remove common prefixes/suffixes
+        if "EEG " in new_ch:
+            new_ch = new_ch.replace("EEG ", "")
+        if "-REF" in new_ch:
+            new_ch = new_ch.replace("-REF", "")
+
+        new_ch = new_ch.capitalize()  # Standardize capitalization
+
+        cleaned_names[ch] = new_ch
+
+    raw.rename_channels(cleaned_names)
+    print(f"  Cleaned channel names: {list(cleaned_names.values())}")
+    return raw
+
+
+## Removes non-EEG physiological and artifact channels from the recording.
+#
+# Drops channels associated with cardiac (EKG/ECG), muscular (EMG), ocular
+# (ROC/LOC), and stimulus/derived (PHOTIC, IBI, BURSTS, SUPPR) signals, as
+# well as any channels whose names are purely numeric.
+#
+# @param raw mne.io.Raw Preloaded raw EEG object (modified in-place).
+# @return mne.io.Raw The raw object with non-EEG channels removed.
+def remove_non_eeg_channels(raw):
+    print("Removing non-EEG channels")
+
+    exclude_types = [
+        "EKG",
+        "ECG",
+        "EMG",
+        "ROC",
+        "LOC",
+        "PHOTIC",
+        "IBI",
+        "BURSTS",
+        "SUPPR",
+    ]
+
+    bad_channels = [
+        ch
+        for ch in raw.ch_names
+        if any(ex_type in ch.upper() for ex_type in exclude_types)
+        or ch.replace(" ", "").isdigit()  # Exclude channels that are just numbers
+    ]
+
+    print(f"  Excluding channels: {bad_channels}")
+
+    raw.drop_channels(bad_channels)
+    return raw
+
+
+# Select standard 10-20 EEG channels from the recording, if available.
+STANDARD_1020_CHANNELS = [
+    "Fp1",
+    "Fp2",
+    "F7",
+    "F3",
+    "Fz",
+    "F4",
+    "F8",
+    "T3",
+    "C3",
+    "Cz",
+    "C4",
+    "T4",
+    "T5",
+    "P3",
+    "Pz",
+    "P4",
+    "T6",
+    "O1",
+    "O2",
+]
+
+
+## Retains only the 19 standard 10-20 system EEG channels.
+#
+# Intersects the recording's channel list with STANDARD_1020_CHANNELS and
+# keeps only those present. Logs a warning if fewer than 19 channels are
+# found, as downstream processing assumes a full 19-channel montage.
+# Must be called after clean_channel_names so channel names match the
+# expected 10-20 format.
+#
+# @param raw mne.io.Raw Preloaded raw EEG object (modified in-place).
+# @return mne.io.Raw The raw object containing only available 10-20 channels.
+def select_1020_channels(raw):
+    print("Selecting standard 10-20 channels")
+
+    available_channels = [ch for ch in STANDARD_1020_CHANNELS if ch in raw.ch_names]
+
+    print(f"  Available channels: {available_channels}")
+
+    if len(available_channels) < 19:
+        print("  Warning: Less than 19 standard channels found.")
+
+    raw.pick(available_channels)
+
+    return raw
+
+
 ## Applies notch and high-pass filters to a raw EEG recording.
 #
 # Notch filter removes US power line noise at 60 Hz.
