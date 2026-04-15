@@ -17,6 +17,7 @@ dependencies = [                  # CHANGED: removed black, flake8, pytest — t
     "matplotlib",
     "loguru",
     "scikit-learn",
+    "pyyaml"
 ]
 
 [project.optional-dependencies]
