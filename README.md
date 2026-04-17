@@ -9,7 +9,7 @@ End-to-end deep learning pipeline for classifying abnormal EEG recordings using 
 - Python 3.11
 - Conda
 
-### Instalation
+### Installation
 
 Clone the repository and create the conda environment:
 
@@ -36,17 +36,17 @@ The full dataset is provided by the Temple University Hospital (TUH) EEG Corpus 
 
 1. Request access at [https://isip.piconepress.com/projects/nedc/html/tuh_eeg/](https://isip.piconepress.com/projects/nedc/html/tuh_eeg/).
 2. Once approved, download the **TUH EEG Abnormal Corpus (TUAB)** with rsync using your provided credentials.
-3. Sotre the data in a secure directory.
+3. Store the data in a secure directory.
    
 ---
 
 ## Data Preparation
 
-### Preporcessing
+### Preprocessing
 
 The full preprocessing pipeline, `preprocessing.py` segments raw EEG recordings, applies filtering methods, and outputs fixed-length numpy arrays with label ready for model input. 
 
-To preproces the full dataset (from the project root):
+To preprocess the full dataset (from the project root):
 
 ```bash
 python src/preprocessing.py --config.yaml
