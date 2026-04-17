@@ -96,24 +96,7 @@ pytest tests/ -v
 
 ## Project Structure
 
-capstone-project/
-├── .github/workflows/     # CI configuration
-├── data/
-│   ├── raw/               # Raw TUH EEG data (not tracked in git)
-│   ├── processed/         # Preprocessed data (not tracked in git)
-│   ├── splits/            # Train/val/test splits (not tracked in git)
-│   └── sample/            # Sample data for testing
-├── jobs/                  # SLURM job scripts
-├── results/               # Model outputs and figures
-├── src/
-│   ├── preprocessing/     # Preprocessing pipeline
-│   ├── training/          # Model training scripts
-│   └── [TODO: other modules]
-├── tests/                 # Unit tests
-├── config.yaml            # Experiment configuration
-├── environment.yml        # Conda environment
-├── requirements.txt       # Pip requirements
-└── README.md
+
 
 
 
