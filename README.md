@@ -102,6 +102,7 @@ capstone-project/
 │   ├── raw/               # Raw TUH EEG data (not tracked in git)
 │   ├── processed/         # Preprocessed data (not tracked in git)
 │   ├── splits/            # Train/val/test splits (not tracked in git)
+│   └── sample/            # Sample data for testing
 ├── jobs/                  # SLURM job scripts
 ├── results/               # Model outputs and figures
 ├── src/
