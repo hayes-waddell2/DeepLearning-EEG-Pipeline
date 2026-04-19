@@ -12,6 +12,7 @@ dependencies:
   - scikit-learn
   - mne
   - pyyaml
+  - pyedflib
   - pip:
     - torch
     - torchvision

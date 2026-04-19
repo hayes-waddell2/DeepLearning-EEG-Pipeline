@@ -6,7 +6,7 @@ import numpy as np
 import mne
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from src.eeg_cnn_lstm.preprocessing.preprocessing import (
+from src.preprocessing.preprocessing import (
     filter_raw,
     load_config,
     load_edf,
@@ -101,7 +101,7 @@ def test_load_edf_returns_raw(tmp_path):
     mock_raw.times = [0, 1, 2, 3]
 
     with patch(
-        "src.eeg_cnn_lstm.preprocessing.preprocessing.mne.io.read_raw_edf",
+        "src.preprocessing.preprocessing.mne.io.read_raw_edf",
         return_value=mock_raw,
     ):
         result = load_edf("fake_file.edf")
