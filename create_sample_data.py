@@ -126,7 +126,7 @@ def save_edf(data, ch_names, sfreq, filepath):
                 {
                     "label": ch,
                     "dimension": "uV",
-                    "sample_rate": int(sfreq),
+                    "sample_frequency": int(sfreq),
                     "physical_min": -500.0,
                     "physical_max": 500.0,
                     "digital_min": -32768,
