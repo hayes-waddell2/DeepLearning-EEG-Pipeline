@@ -1,0 +1,5 @@
+mne>=1.6.0
+numpy>=1.24.0
+pyedflib>=0.1.22
+pyyaml>=6.0
+pytest>=7.0

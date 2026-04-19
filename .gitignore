@@ -36,9 +36,10 @@ src/eeg_cnn_lstm/_version.py
 # Local development - never push to GitHub
 local_output/
 sample_data/
+visualize.py
 
 # Local plots
 *.png
 *.jpg
 *.svg
-*.pdf
+*.pdfdata/
