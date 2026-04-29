@@ -35,6 +35,7 @@ if [[ ! -d "${INPUT_DIR}" ]]; then
 fi
 
 . /tools/spack/share/spack/setup-env.sh
+spack unload --all 2>/dev/null || true
 spack load /khlktry
 
 VENV="${REPO_DIR}/.venv"
