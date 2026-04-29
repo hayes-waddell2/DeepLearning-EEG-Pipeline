@@ -7,7 +7,7 @@
 #SBATCH --time=0-00:30:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=9
+#SBATCH --cpus-per-task=2
 #SBATCH --mem=16g
 
 # Debug-partition test of the preprocessing pipeline.
@@ -58,7 +58,7 @@ echo "Python:  $(which python)"
 echo "Started: $(date)"
 echo "============================================================"
 
-python src/preprocessing/preprocessing.py \
+python -u src/preprocessing/preprocessing.py \
     --input "${INPUT_DIR}" \
     --output "${OUTPUT_DIR}"
 
