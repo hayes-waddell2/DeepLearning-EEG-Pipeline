@@ -1,10 +1,10 @@
 #!/bin/bash -l
 #SBATCH --job-name=tuh-eeg-preprocess-debug
 #SBATCH --account=eeg-cnn-lstm
-#SBATCH --partition=debug
+#SBATCH --partition=sporc-cpu
 #SBATCH --output=/shared/rc/eeg-cnn-lstm/preprocess_%x_%j.out
 #SBATCH --error=/shared/rc/eeg-cnn-lstm/preprocess_%x_%j.err
-#SBATCH --time=0-00:30:00
+#SBATCH --time=1-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
