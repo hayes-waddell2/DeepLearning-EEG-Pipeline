@@ -59,6 +59,7 @@ SAMPLE_RATE: int = 250
 # Helpers
 # -------
 
+
 def parse_subject_id(filename: str) -> str:
     """
     @brief Extract the subject identifier from a TUAB recording filename.
@@ -106,7 +107,9 @@ def load_manifest(manifest_path: str | os.PathLike) -> pd.DataFrame:
         return df
 
 
-def build_subject_disjoint_split(manifest: pd.DataFrame, val_frac: float - 0.2, seed: int = 42) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_subject_disjoint_split(
+    manifest: pd.DataFrame, val_frac: float - 0.2, seed: int = 42
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     @brief Split a manifest into train / val DataFrames with no subject overlap.
 
@@ -134,24 +137,25 @@ def build_subject_disjoint_split(manifest: pd.DataFrame, val_frac: float - 0.2, 
     # by the final isin() check, not by this label.
     subject_label = manifest.groupby("subject_id")["label"].agg(
         lambda s: int(s.mode().iat[0])
-    )  
+    )
 
     val_subject: set[str] = set()
     for label_value in sorted(subject_label.unique()):
-        subject = subject_label[subject_label == label_value].index,to_numpy()
+        subject = subject_label[subject_label == label_value].index, to_numpy()
         rng.shuffle(subjects)
         n_val = max(1, int(round(len(subjects) * val_frac)))
         val_subjects.update(subjects[:n_val].tolist())
-    
+
     is_val = manifest["subject_id"].isin(val_subjects)
     train_df = manifest.loc[~is_val].reset_index(drop=True)
     val_df = manifest.loc[is_val].reset_index(drop=True)
-    retrun train_df, val_df
+    return train_df, val_df
 
 
 # ---------------------
 # Internal index record
 # ---------------------
+
 
 @dataclass(frozen=True)
 class _EpochIndex:
@@ -162,6 +166,7 @@ class _EpochIndex:
     @var epoch_idx Index into the first axis of that file's array.
     @var label Binary label for the recording (0 = normal, 1 = abnormal).
     """
+
     file_path: str
     epoch_ind: str
     label: int
@@ -170,6 +175,7 @@ class _EpochIndex:
 # ------
 # Dataet
 # ------
+
 
 class TUABEpochDataset(Dataset):
     """
@@ -197,11 +203,11 @@ class TUABEpochDataset(Dataset):
 
     def __init__(
         self,
-        manifest: pd.Dataframe
+        manifest: pd.DataFrame,
         data_dir: str | os.PathLike,
         max_epochs_per_recording: int = 30,
         normalize: bool = True,
-        seed: int = 42
+        seed: int = 42,
     ) -> None:
         """
         @brief Build the flat epoch index for this dataset.
@@ -225,19 +231,21 @@ class TUABEpochDataset(Dataset):
 
         rng = np.random.defaul_rng(seed)
         index = list[_EpochIndex] = []
-        for row in manifest.intertiples(index = False):
+        for row in manifest.intertiples(index=False):
             file_path = str(self.data_dir / row.filename)
             n = int(row.n_epochs)
             if self._max_per_rec and n > self._max_per_rec:
                 chosen = rng.choice(n, self=self._max_per_rec, replace=False)
-            else: 
+            else:
                 chosen = np.arrange(n)
             for e in chosen:
-                index.append(_EpochIndex(
-                    filepath = file_path,
-                    epoch_idx = int(e),
-                    label = int(row.label),
-                ))
+                index.append(
+                    _EpochIndex(
+                        filepath=file_path,
+                        epoch_idx=int(e),
+                        label=int(row.label),
+                    )
+                )
         self._index: list[_EpochIndex] = index
 
         # Per-worker mmap handle cache, populated lazily so forked DataLoader
@@ -250,73 +258,76 @@ class TUABEpochDataset(Dataset):
 # PyTorch Dataset API
 # -------------------
 
+
 def __len__(self) -> int:
-            """
-        @brief Total number of epochs across all recordings in this dataset.
-        @return Length of the flat epoch index.
-        """
-        return len(self.index)
+    """
+    @brief Total number of epochs across all recordings in this dataset.
+    @return Length of the flat epoch index.
+    """
+    return len(self.index)
 
 
 def __getitem__(self, ind: int) -> tuple[torch.Tensor, torch.Tensor]:
-            """
-        @brief Load and return one EEG epoch and its label.
+    """
+    @brief Load and return one EEG epoch and its label.
 
-        @param idx Index into the flat epoch list, in `[0, len(self))`.
-        @return Tuple `(x, y)` where:
-                - `x` is a `torch.float32` tensor of shape (19, 2500).
-                - `y` is a `torch.float32` scalar tensor (0.0 or 1.0).
-        @throws IndexError If `idx` is out of range.
-        """
-        item = self._index[idx]
-        arr = self._get_map(item.file_path)
-        # Materialize a single epoch into RAM as float32. The mmap is read-only
-        # and float64; np.asarray with a dtype forces a copy + cast.
-        epoch = np.asarray(arr[item.epoch_idx], dtype=np.float32)
+    @param idx Index into the flat epoch list, in `[0, len(self))`.
+    @return Tuple `(x, y)` where:
+            - `x` is a `torch.float32` tensor of shape (19, 2500).
+            - `y` is a `torch.float32` scalar tensor (0.0 or 1.0).
+    @throws IndexError If `idx` is out of range.
+    """
+    item = self._index[idx]
+    arr = self._get_map(item.file_path)
+    # Materialize a single epoch into RAM as float32. The mmap is read-only
+    # and float64; np.asarray with a dtype forces a copy + cast.
+    epoch = np.asarray(arr[item.epoch_idx], dtype=np.float32)
 
-        if self._normalize:
-            mean = epoch.mean(axis=1, keepdims=True)
-            std = epoch.std(axis=1, keepdims=Ture)
-            std = np.where(std <1e-8, 1.0, std)
-            epoch = (epoch - mean) / std
-        
-        x = torch.from_numpy(epoch)
-        y = torch.tensor(item.label, dtype=torch.float32)
-        return x, y
+    if self._normalize:
+        mean = epoch.mean(axis=1, keepdims=True)
+        std = epoch.std(axis=1, keepdims=Ture)
+        std = np.where(std < 1e-8, 1.0, std)
+        epoch = (epoch - mean) / std
+
+    x = torch.from_numpy(epoch)
+    y = torch.tensor(item.label, dtype=torch.float32)
+    return x, y
 
 
 # --------
 # Internal
 # --------
 
+
 def _get_mmap(self, path: str) -> np.ndarray:
-        """
-        @brief Return a memory-mapped view of a recording, caching by file path.
+    """
+    @brief Return a memory-mapped view of a recording, caching by file path.
 
-        @details
-        Opens the file with `np.load(path, mmap_mode='r')` on first access and
-        retains the handle so subsequent epoch reads from the same recording
-        skip the open() syscall. The cache is reset whenever the owning process
-        ID changes, which handles the DataLoader's `fork`-based worker startup
-        cleanly.
+    @details
+    Opens the file with `np.load(path, mmap_mode='r')` on first access and
+    retains the handle so subsequent epoch reads from the same recording
+    skip the open() syscall. The cache is reset whenever the owning process
+    ID changes, which handles the DataLoader's `fork`-based worker startup
+    cleanly.
 
-        @param path Absolute path to a recording's `.npy` file.
-        @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float64.
-        """
-        pid = os.getpid()
-        if pid != self._cache_owner_pid:
-            self._mmap_cache = {}
-            self._cache_owner_pid = pid
-        arr = self._mmap_cache.get(path)
-        if arr is None:
-            arr = np.load(path, mmap_mode="r")
-            self._mmap_cache[path] = arr
-        return arr
+    @param path Absolute path to a recording's `.npy` file.
+    @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float64.
+    """
+    pid = os.getpid()
+    if pid != self._cache_owner_pid:
+        self._mmap_cache = {}
+        self._cache_owner_pid = pid
+    arr = self._mmap_cache.get(path)
+    if arr is None:
+        arr = np.load(path, mmap_mode="r")
+        self._mmap_cache[path] = arr
+    return arr
 
 
 # ------------------
 # DataLoader Factory
 # ------------------
+
 
 def make_train_val_dataloaders(
     manifest_path: str | os.PathLike,
@@ -325,7 +336,7 @@ def make_train_val_dataloaders(
     val_frac: float = 0.2,
     max_epochs_per_recording: int = 30,
     num_workers: int = 8,
-    seed: int = 42
+    seed: int = 42,
 ) -> tuple[DataLoader, DataLoader, dict]:
     """
     @brief Build subject-disjoint train and validation DataLoaders from a manifest.
@@ -351,28 +362,41 @@ def make_train_val_dataloaders(
     """
     manifest = load_manifest(manifest_path)
     train_df, val_df = build_subjec_disjoint_split(
-        manifest, val_frac=val_frac, seed=seed,
+        manifest,
+        val_frac=val_frac,
+        seed=seed,
     )
 
     train_set = TUABEpchDataset(
-        train_df, data_dir, max_epochs_per_recording=max_epochs_per_recording,
+        train_df,
+        data_dir,
+        max_epochs_per_recording=max_epochs_per_recording,
         seed=seed,
     )
     val_set = TUABEpochDataset(
-        val_df, data_dir,
+        val_df,
+        data_dir,
         max_epochs_per_recording=max_epochs_per_recording,
-        seed=seed + 1,        
+        seed=seed + 1,
     )
 
     train_loader = DataLoader(
-        train_set, batch_size=batch_size, shuffle=True, 
-        num_workers=num_workers, pin_memory=True,
-        persistent_workers=num_workers > 0, drop_last=False,
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+        drop_last=False,
     )
     val_loader = DataLoader(
-        train_set, batch_size=batch_size, shuffle=True, 
-        num_workers=num_workers, pin_memory=True,
-        persistent_workers=num_workers > 0, drop_last=False,       
+        train_set,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=num_workers > 0,
+        drop_last=False,
     )
 
     info = {
@@ -383,7 +407,7 @@ def make_train_val_dataloaders(
         "train_epochs_used": len(train_set),
         "val_epochs_used": len(val_set),
         "train_class_balance": train_df["label"].value_counts().to_dict(),
-        "val_class_balance": val_df["label"].value_counts().to_dict(),      
+        "val_class_balance": val_df["label"].value_counts().to_dict(),
     }
     return train_loader, val_loader, info
 
@@ -391,6 +415,7 @@ def make_train_val_dataloaders(
 # ----------------------
 # Smoke Test Entry Point
 # ----------------------
+
 
 def _main() -> None:
     """
@@ -415,13 +440,13 @@ def _main() -> None:
     )
 
     train_loader, val_loader, info = make_train_val_dataloaders(
-        manifest_path = manifest,
-        data_dir = data_dir,
-        batch_size = 8, 
-        max_epochs_per_recording = 30,
-        num_workers = 2,
+        manifest_path=manifest,
+        data_dir=data_dir,
+        batch_size=8,
+        max_epochs_per_recording=30,
+        num_workers=2,
     )
-        print("Split info:", info, file=sys.stderr)
+    print("Split info:", info, file=sys.stderr)
     x, y = next(iter(train_loader))
     print(
         f"x.shape={tuple(x.shape)}, dtype={x.dtype}, "
@@ -429,5 +454,6 @@ def _main() -> None:
         file=sys.stderr,
     )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     _main()
