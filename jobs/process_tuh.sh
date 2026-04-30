@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=16g
+#SBATCH --mem=32g
 
 # Debug-partition test of the preprocessing pipeline.
 # Usage:
@@ -65,6 +65,5 @@ python -u src/preprocessing/preprocessing.py \
 echo "============================================================"
 echo "Finished: $(date)"
 echo "============================================================"
-PREPROCESS_DEBUG_EOF
 
 chmod +x jobs/preprocess_debug.sh
