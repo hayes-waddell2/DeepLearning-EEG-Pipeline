@@ -1,0 +1,20 @@
+# configs/demo.yaml
+data:
+  train_manifest: /mnt/c/dsci_601/capstone/capstone-project/data/processed/train_manifest.csv
+  train_data_dir: /mnt/c/dsci_601/capstone/capstone-project/data/processed/train
+  eval_manifest:  /mnt/c/dsci_601/capstone/capstone-project/data/processed/eval_manifest.csv
+  eval_data_dir:  /mnt/c/dsci_601/capstone/capstone-project/data/processed/eval
+
+loader:
+  batch_size: 16
+  val_frac: 0.2
+  max_epochs_per_recording: 20
+  num_workers: 2          # WSL handles workers fine
+  seed: 42
+
+train:
+  num_epochs: 2
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  use_amp: true
+  device: auto         # picks cuda if available, else cpu
