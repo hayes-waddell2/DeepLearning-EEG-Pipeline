@@ -22,7 +22,7 @@ dependencies = [                  # CHANGED: removed black, flake8, pytest — t
 
 [project.optional-dependencies]
 dev = [
-    "black==24.2.0",
+    "black>=24.0",
     "flake8",
     "pytest",
 ]
@@ -42,4 +42,4 @@ testpaths = ["tests"]
 
 [tool.black]
 line-length = 88
-target-version = ["py311"]
+target-version = ["py311", "py312"]
