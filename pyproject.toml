@@ -9,15 +9,16 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = [                  # CHANGED: removed black, flake8, pytest — those are dev only
+dependencies = [
     "numpy<2",
+    "pandas",
     "torch",
     "mne",
     "scipy",
     "matplotlib",
     "loguru",
     "scikit-learn",
-    "pyyaml"
+    "pyyaml",
 ]
 
 [project.optional-dependencies]
