@@ -36,7 +36,6 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-
 # -------------
 # Configuration
 # -------------
@@ -116,15 +115,17 @@ class _ConvBlock(nn.Module):
         padding = kernel_size // 2
         self.net = nn.Sequential(
             nn.Conv1d(
-                in_channels, out_channels, kernel_size,
-                padding=padding, bias=False,
+                in_channels,
+                out_channels,
+                kernel_size,
+                padding=padding,
+                bias=False,
             ),
             nn.BatchNorm1d(out_channels),
             nn.ELU(),
             nn.Dropout(dropout),
             nn.MaxPool1d(pool_size),
         )
-    
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -160,6 +161,7 @@ class CNN_LSTM(nn.Module):
       - Bidirectional is appropriate because we are not in an online
         setting; the model can attend to both sides of any event.
     """
+
     def __init__(self, config: Optional[ModelConfig] = None) -> None:
         """
         @brief Build the CNN feature extractor, LSTM, and MLP head.
@@ -186,7 +188,7 @@ class CNN_LSTM(nn.Module):
             num_layers=cfg.lstm_layers,
             batch_first=True,
             bidirectional=cfg.lstm_bidirectional,
-            dropout=cfg.lstm_dropout if cfg.lstm_layers > 1 else 0.0
+            dropout=cfg.lstm_dropout if cfg.lstm_layers > 1 else 0.0,
         )
 
         n_directions = 2 if cfg.lstm_bidirectional else 1
@@ -200,7 +202,6 @@ class CNN_LSTM(nn.Module):
             nn.Linear(cfg.head_hidden, 1),
         )
 
-    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         @brief Run a forward pass on a batch of EEG epochs.
@@ -225,12 +226,11 @@ class CNN_LSTM(nn.Module):
             forward_last = h_n[-2]
             backward_last = h_n[-1]
             summary = torch.cat([forward_last, backward_last], dim=1)
-        else: 
+        else:
             summary = h_n[-1]
-        
+
         logits = self.head(summary).squeeze(-1)
         return logits
-    
 
     def num_parameters(self, trainable_only: bool = True) -> int:
         """
@@ -268,6 +268,7 @@ def _main() -> None:
     print(f"Input shape:  {tuple(fake.shape)}")
     print(f"Output shape: {tuple(logits.shape)}  (expected: (4,))")
     print(f"Logit sample: {[round(v, 4) for v in logits.tolist()]}")
+
 
 if __name__ == "__main__":
     _main()
