@@ -41,23 +41,23 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-# ---------
+# -----------------------------------------------------------------------------
 # Constants
-# ---------
+# -----------------------------------------------------------------------------
 
-# Number of EEG channels in the standard 10-20 montage
+## @brief Number of EEG channels in the standard 10-20 montage used by preprocessing.
 N_CHANNELS: int = 19
 
-# Number of time samples per epoch
+## @brief Number of time samples per epoch (10 s window @ 250 Hz).
 N_TIMESTEPS: int = 2500
 
-# Sampling frequency
+## @brief Sampling frequency of the preprocessed data, in Hz.
 SAMPLE_RATE: int = 250
 
 
-# -------
+# -----------------------------------------------------------------------------
 # Helpers
-# -------
+# -----------------------------------------------------------------------------
 
 
 def parse_subject_id(filename: str) -> str:
@@ -74,7 +74,7 @@ def parse_subject_id(filename: str) -> str:
     @throws ValueError If the filename has no underscore and therefore no
             parseable subject prefix.
     """
-    base = os.path.baename(filename)
+    base = os.path.basename(filename)
     if "_" not in base:
         raise ValueError(f"Cannot parse subject id from: {filename!r}")
     return base.split("_", 1)[0]
@@ -96,19 +96,21 @@ def load_manifest(manifest_path: str | os.PathLike) -> pd.DataFrame:
     @throws KeyError If required columns are missing from the manifest.
     """
     df = pd.read_csv(manifest_path)
-    required = {"filename", "label", "n_epochs", "s_frq"}
+    required = {"filename", "label", "n_epochs", "sfreq"}
     missing = required - set(df.columns)
     if missing:
         raise KeyError(f"Manifest is missing required columns: {sorted(missing)}")
-        df = df.copy
-        df["subject_id"] = df["filename"].map(parse_subject_id)
-        df["label"] = df["label"].astype(np.int64)
-        df["n_epochs"] = df["n_epochs"].astype(np.int64)
-        return df
+    df = df.copy()
+    df["subject_id"] = df["filename"].map(parse_subject_id)
+    df["label"] = df["label"].astype(np.int64)
+    df["n_epochs"] = df["n_epochs"].astype(np.int64)
+    return df
 
 
 def build_subject_disjoint_split(
-    manifest: pd.DataFrame, val_frac: float - 0.2, seed: int = 42
+    manifest: pd.DataFrame,
+    val_frac: float = 0.2,
+    seed: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     @brief Split a manifest into train / val DataFrames with no subject overlap.
@@ -139,9 +141,9 @@ def build_subject_disjoint_split(
         lambda s: int(s.mode().iat[0])
     )
 
-    val_subject: set[str] = set()
+    val_subjects: set[str] = set()
     for label_value in sorted(subject_label.unique()):
-        subject = subject_label[subject_label == label_value].index, to_numpy()
+        subjects = subject_label[subject_label == label_value].index.to_numpy()
         rng.shuffle(subjects)
         n_val = max(1, int(round(len(subjects) * val_frac)))
         val_subjects.update(subjects[:n_val].tolist())
@@ -152,9 +154,9 @@ def build_subject_disjoint_split(
     return train_df, val_df
 
 
-# ---------------------
+# -----------------------------------------------------------------------------
 # Internal index record
-# ---------------------
+# -----------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -168,13 +170,13 @@ class _EpochIndex:
     """
 
     file_path: str
-    epoch_ind: str
+    epoch_idx: int
     label: int
 
 
-# ------
-# Dataet
-# ------
+# -----------------------------------------------------------------------------
+# Dataset
+# -----------------------------------------------------------------------------
 
 
 class TUABEpochDataset(Dataset):
@@ -205,7 +207,7 @@ class TUABEpochDataset(Dataset):
         self,
         manifest: pd.DataFrame,
         data_dir: str | os.PathLike,
-        max_epochs_per_recording: int = 30,
+        max_epochs_per_recording: Optional[int] = 30,
         normalize: bool = True,
         seed: int = 42,
     ) -> None:
@@ -227,21 +229,21 @@ class TUABEpochDataset(Dataset):
         super().__init__()
         self._data_dir = Path(data_dir)
         self._normalize = normalize
-        self._max_per_rec = int(max_epochs_per_recording)
+        self._max_per_rec = int(max_epochs_per_recording or 0)
 
-        rng = np.random.defaul_rng(seed)
-        index = list[_EpochIndex] = []
-        for row in manifest.intertiples(index=False):
-            file_path = str(self.data_dir / row.filename)
+        rng = np.random.default_rng(seed)
+        index: list[_EpochIndex] = []
+        for row in manifest.itertuples(index=False):
+            file_path = str(self._data_dir / row.filename)
             n = int(row.n_epochs)
             if self._max_per_rec and n > self._max_per_rec:
-                chosen = rng.choice(n, self=self._max_per_rec, replace=False)
+                chosen = rng.choice(n, size=self._max_per_rec, replace=False)
             else:
-                chosen = np.arrange(n)
+                chosen = np.arange(n)
             for e in chosen:
                 index.append(
                     _EpochIndex(
-                        filepath=file_path,
+                        file_path=file_path,
                         epoch_idx=int(e),
                         label=int(row.label),
                     )
@@ -253,80 +255,75 @@ class TUABEpochDataset(Dataset):
         self._mmap_cache: dict[str, np.ndarray] = {}
         self._cache_owner_pid: int = -1
 
+    # -------------------------------------------------------------------------
+    # PyTorch Dataset API
+    # -------------------------------------------------------------------------
 
-# -------------------
-# PyTorch Dataset API
-# -------------------
+    def __len__(self) -> int:
+        """
+        @brief Total number of epochs across all recordings in this dataset.
+        @return Length of the flat epoch index.
+        """
+        return len(self._index)
 
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        @brief Load and return one EEG epoch and its label.
 
-def __len__(self) -> int:
-    """
-    @brief Total number of epochs across all recordings in this dataset.
-    @return Length of the flat epoch index.
-    """
-    return len(self.index)
+        @param idx Index into the flat epoch list, in `[0, len(self))`.
+        @return Tuple `(x, y)` where:
+                - `x` is a `torch.float32` tensor of shape (19, 2500).
+                - `y` is a `torch.float32` scalar tensor (0.0 or 1.0).
+        @throws IndexError If `idx` is out of range.
+        """
+        item = self._index[idx]
+        arr = self._get_mmap(item.file_path)
+        # Materialize a single epoch into RAM as float32. The mmap is read-only
+        # and float64; np.asarray with a dtype forces a copy + cast.
+        epoch = np.asarray(arr[item.epoch_idx], dtype=np.float32)
 
+        if self._normalize:
+            mean = epoch.mean(axis=1, keepdims=True)
+            std = epoch.std(axis=1, keepdims=True)
+            std = np.where(std < 1e-8, 1.0, std)
+            epoch = (epoch - mean) / std
 
-def __getitem__(self, ind: int) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    @brief Load and return one EEG epoch and its label.
+        x = torch.from_numpy(epoch)
+        y = torch.tensor(item.label, dtype=torch.float32)
+        return x, y
 
-    @param idx Index into the flat epoch list, in `[0, len(self))`.
-    @return Tuple `(x, y)` where:
-            - `x` is a `torch.float32` tensor of shape (19, 2500).
-            - `y` is a `torch.float32` scalar tensor (0.0 or 1.0).
-    @throws IndexError If `idx` is out of range.
-    """
-    item = self._index[idx]
-    arr = self._get_map(item.file_path)
-    # Materialize a single epoch into RAM as float32. The mmap is read-only
-    # and float64; np.asarray with a dtype forces a copy + cast.
-    epoch = np.asarray(arr[item.epoch_idx], dtype=np.float32)
+    # -------------------------------------------------------------------------
+    # Internal
+    # -------------------------------------------------------------------------
 
-    if self._normalize:
-        mean = epoch.mean(axis=1, keepdims=True)
-        std = epoch.std(axis=1, keepdims=Ture)
-        std = np.where(std < 1e-8, 1.0, std)
-        epoch = (epoch - mean) / std
+    def _get_mmap(self, path: str) -> np.ndarray:
+        """
+        @brief Return a memory-mapped view of a recording, caching by file path.
 
-    x = torch.from_numpy(epoch)
-    y = torch.tensor(item.label, dtype=torch.float32)
-    return x, y
+        @details
+        Opens the file with `np.load(path, mmap_mode='r')` on first access and
+        retains the handle so subsequent epoch reads from the same recording
+        skip the open() syscall. The cache is reset whenever the owning process
+        ID changes, which handles the DataLoader's `fork`-based worker startup
+        cleanly.
 
-
-# --------
-# Internal
-# --------
-
-
-def _get_mmap(self, path: str) -> np.ndarray:
-    """
-    @brief Return a memory-mapped view of a recording, caching by file path.
-
-    @details
-    Opens the file with `np.load(path, mmap_mode='r')` on first access and
-    retains the handle so subsequent epoch reads from the same recording
-    skip the open() syscall. The cache is reset whenever the owning process
-    ID changes, which handles the DataLoader's `fork`-based worker startup
-    cleanly.
-
-    @param path Absolute path to a recording's `.npy` file.
-    @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float64.
-    """
-    pid = os.getpid()
-    if pid != self._cache_owner_pid:
-        self._mmap_cache = {}
-        self._cache_owner_pid = pid
-    arr = self._mmap_cache.get(path)
-    if arr is None:
-        arr = np.load(path, mmap_mode="r")
-        self._mmap_cache[path] = arr
-    return arr
+        @param path Absolute path to a recording's `.npy` file.
+        @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float64.
+        """
+        pid = os.getpid()
+        if pid != self._cache_owner_pid:
+            self._mmap_cache = {}
+            self._cache_owner_pid = pid
+        arr = self._mmap_cache.get(path)
+        if arr is None:
+            arr = np.load(path, mmap_mode="r")
+            self._mmap_cache[path] = arr
+        return arr
 
 
-# ------------------
-# DataLoader Factory
-# ------------------
+# -----------------------------------------------------------------------------
+# DataLoader factory
+# -----------------------------------------------------------------------------
 
 
 def make_train_val_dataloaders(
@@ -334,7 +331,7 @@ def make_train_val_dataloaders(
     data_dir: str | os.PathLike,
     batch_size: int = 64,
     val_frac: float = 0.2,
-    max_epochs_per_recording: int = 30,
+    max_epochs_per_recording: Optional[int] = 30,
     num_workers: int = 8,
     seed: int = 42,
 ) -> tuple[DataLoader, DataLoader, dict]:
@@ -361,13 +358,13 @@ def make_train_val_dataloaders(
             with split-size diagnostics (counts, class balance, subject counts).
     """
     manifest = load_manifest(manifest_path)
-    train_df, val_df = build_subjec_disjoint_split(
+    train_df, val_df = build_subject_disjoint_split(
         manifest,
         val_frac=val_frac,
         seed=seed,
     )
 
-    train_set = TUABEpchDataset(
+    train_set = TUABEpochDataset(
         train_df,
         data_dir,
         max_epochs_per_recording=max_epochs_per_recording,
@@ -390,9 +387,9 @@ def make_train_val_dataloaders(
         drop_last=False,
     )
     val_loader = DataLoader(
-        train_set,
+        val_set,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=num_workers,
         pin_memory=True,
         persistent_workers=num_workers > 0,
@@ -412,9 +409,9 @@ def make_train_val_dataloaders(
     return train_loader, val_loader, info
 
 
-# ----------------------
-# Smoke Test Entry Point
-# ----------------------
+# -----------------------------------------------------------------------------
+# Smoke test entry point
+# -----------------------------------------------------------------------------
 
 
 def _main() -> None:
@@ -422,11 +419,11 @@ def _main() -> None:
     @brief Minimal CLI smoke test: load one batch and print its shapes.
 
     @details
-    Run as `python -m src.dataset` from the project root. Override the default
-    paths via environment variables `TUAB_MANIFEST` and `TUAB_DATA_DIR`. Note
-    the doubled `train/train/` quirk in the on-disk layout — `data_dir` should
-    point to the inner folder containing the `.npy` files, not the outer one
-    that contains the manifest.
+    Run as `python -m src.utils.dataset` from the project root. Override the
+    default paths via environment variables `TUAB_MANIFEST` and `TUAB_DATA_DIR`.
+    Note the doubled `train/train/` quirk in the cluster's on-disk layout —
+    `data_dir` should point to the inner folder containing the `.npy` files,
+    not the outer one that contains the manifest.
     """
     import sys
 

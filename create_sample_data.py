@@ -173,7 +173,7 @@ def create_sample_dataset(
                 # Deterministic seed per (split, label, index) combination
                 seed = abs(hash(f"{split}{label}{i}")) % (2**31)
                 data = generate_signals(n_times, sfreq, label, seed=seed)
-                filename = f"sample_{label}_{split}_{i:03d}.edf"
+                filename = f"sub{label[0]}{split[0]}{i:03d}_s001_t000.edf"
                 save_edf(data, ALL_CHANNELS, sfreq, split_dir / filename)
 
     print(f"\nSample dataset written to: {output_dir / 'edf'}")
