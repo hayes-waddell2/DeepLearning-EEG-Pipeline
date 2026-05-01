@@ -25,6 +25,7 @@ dev = [
     "black>=24.0",
     "flake8",
     "pytest",
+    "pyedflib",
 ]
 
 [build-system]
