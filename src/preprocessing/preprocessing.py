@@ -17,7 +17,7 @@ from pathlib import Path
 # @param config_path str Path to the YAML config file.
 # @return dict Configuration parameters.
 # @throws FileNotFoundError If the config file does not exist.
-def load_config(config_path="config.yaml"):
+def load_config(config_path="configs/preprocessing.yaml"):
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
 
@@ -298,7 +298,9 @@ def save_epochs(epochs, edf_file, out_path, label):
 # @return argparse.Namespace Parsed arguments.
 def parse_args():
     parser = argparse.ArgumentParser(description="Preprocess EEG .edf files")
-    parser.add_argument("--config", default="config.yaml", help="Path to config file")
+    parser.add_argument(
+        "--config", default="configs/preprocessing.yaml", help="Path to config file"
+    )
     parser.add_argument(
         "--input",
         default=None,

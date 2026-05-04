@@ -18,7 +18,7 @@ mne.set_log_level("WARNING")  # Suppress verbose MNE output
 #
 # @param config_path str Path to the YAML config file.
 # @return dict Configuration parameters.
-def load_config(config_path="config.yaml"):
+def load_config(config_path="configs/preprocessing.yaml"):
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
 

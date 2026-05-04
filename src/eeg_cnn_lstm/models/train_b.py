@@ -12,7 +12,7 @@ when AUC is undefined) is saved for the optional final-eval pass.
 
 @par Usage:
 @verbatim
-python -m src.train --config configs/demo.yaml
+python -m src.eeg_cnn_lstm.models.train_b --config configs/demo.yaml
 @endverbatim
 
 @par Config schema:

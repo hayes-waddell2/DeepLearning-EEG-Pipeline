@@ -19,8 +19,8 @@
 #   <output>/edf/eval/abnormal/01_tcp_ar/sample_abnormal_eval_000.edf
 #
 # Usage:
-#   python create_sample_data.py
-#   python create_sample_data.py --output data/raw
+#   python scripts/create_sample_data.py
+#   python scripts/create_sample_data.py --output data/raw
 #   --n_normal 3 --n_abnormal 3 --duration 65
 
 import argparse
