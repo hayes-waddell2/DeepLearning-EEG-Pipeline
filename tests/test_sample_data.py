@@ -8,8 +8,8 @@
 # run to verify your data has been downloaded/scraped/preprocessed correctly and
 # is in the correct format for your models."
 #
-# Run after create_sample_data.py:
-#   python create_sample_data.py
+# Run after scripts/create_sample_data.py:
+#   python scripts/create_sample_data.py
 #   pytest tests/test_data_integrity.py -v
 
 
@@ -64,10 +64,11 @@ def load_raw(edf_path):
 
 ## Verifies that the sample data directory has been created.
 #
-# Fails with a descriptive message if create_sample_data.py has not been run.
+# Fails with a descriptive message if scripts/create_sample_data.py has not been run.
 def test_sample_data_root_exists():
     assert SAMPLE_DATA_DIR.exists(), (
-        "Sample data not found. Generate it first:\n" "  python create_sample_data.py"
+        "Sample data not found. Generate it first:\n"
+        "  python scripts/create_sample_data.py"
     )
 
 
