@@ -1,0 +1,26 @@
+# configs/baseline_smoke.yaml
+# Cluster smoke test on the debug partition. Real data, but heavily
+# subsampled so the full pipeline runs end-to-end in ~5-10 minutes.
+
+data:
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train
+
+loader:
+  batch_size: 64
+  val_frac: 0.2
+  max_epochs_per_recording: 5    # ~13.5k epochs total instead of 743k
+  num_workers: 4
+  seed: 42
+
+train:
+  num_epochs: 1
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  use_amp: true
+  device: cuda
+  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_smoke
+
+eval:
+  run_final_eval: false

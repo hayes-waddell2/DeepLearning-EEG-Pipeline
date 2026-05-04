@@ -1,0 +1,27 @@
+# configs/baseline.yaml
+# Real TUAB training run on the cluster A5000.
+# Eval set is intentionally untouched (run_final_eval: false).
+
+data:
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train
+  # eval_* paths intentionally omitted — eval.run_final_eval is false.
+
+loader:
+  batch_size: 64
+  val_frac: 0.2
+  max_epochs_per_recording: null     # use every epoch
+  num_workers: 8
+  seed: 42
+
+train:
+  num_epochs: 5
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  use_amp: true
+  device: cuda
+  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_v1
+
+eval:
+  run_final_eval: false              # do NOT touch eval data
