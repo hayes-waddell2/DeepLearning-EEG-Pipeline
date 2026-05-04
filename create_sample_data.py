@@ -20,7 +20,8 @@
 #
 # Usage:
 #   python create_sample_data.py
-#   python create_sample_data.py --output data/raw --n_normal 3 --n_abnormal 3 --duration 65
+#   python create_sample_data.py --output data/raw
+#   --n_normal 3 --n_abnormal 3 --duration 65
 
 import argparse
 import numpy as np
@@ -214,7 +215,10 @@ def parse_args():
         "--duration",
         type=float,
         default=65.0,
-        help="Recording duration in seconds (default: 65.0). Must be >10s for at least one epoch.",
+        help=(
+            "Recording duration in seconds (default: 65.0). "
+            "Must be >10s for at least one epoch.",
+        ),
     )
     parser.add_argument(
         "--sfreq",
