@@ -12,7 +12,7 @@
 #   python create_sample_data.py
 #   pytest tests/test_data_integrity.py -v
 
-import pytest
+
 import numpy as np
 import mne
 from pathlib import Path
@@ -189,8 +189,6 @@ def test_full_pipeline_produces_valid_epochs(tmp_path):
         resample_raw,
         apply_common_average_montage,
         segment_raw,
-        save_epochs,
-        extract_label,
     )
 
     edfs = get_edf_files("train")
