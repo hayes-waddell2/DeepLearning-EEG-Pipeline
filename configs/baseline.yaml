@@ -1,10 +1,10 @@
 # configs/baseline.yaml
-# Real TUAB training run on the cluster A5000.
+# Real TUAB training run on the cluster A100.
 # Eval set is intentionally untouched (run_final_eval: false).
 
 data:
-  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv
-  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
   # eval_* paths intentionally omitted — eval.run_final_eval is false.
 
 loader:

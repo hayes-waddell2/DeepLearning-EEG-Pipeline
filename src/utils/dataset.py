@@ -13,12 +13,12 @@ Key features:
   - Optional per-recording subsampling (`max_epochs_per_recording`) for fast
     smoke tests on a fraction of the data.
   - Per-channel z-score normalization on each epoch.
-  - float64 -> float32 cast at load time (the original dtype is overkill for EEG).
+  - float16 (uV)-> float32 cast at load time (the original dtype is overkill for EEG).
 
 @par Expected on-disk layout:
 @verbatim
 data_dir/
-    <recording_id>_epochs.npy   # shape (n_epochs, 19, 2500), dtype float64
+    <recording_id>_epochs.npy   # shape (n_epochs, 19, 2500), dtype float16, units uV
 manifest.csv                    # columns: filename,label,n_epochs,sfreq
 @endverbatim
 
@@ -279,13 +279,13 @@ class TUABEpochDataset(Dataset):
         item = self._index[idx]
         arr = self._get_mmap(item.file_path)
         # Materialize a single epoch into RAM as float32. The mmap is read-only
-        # and float64; np.asarray with a dtype forces a copy + cast.
+        # and float16 (uV); np.asarray with a dtype forces a copy + cast.
         epoch = np.asarray(arr[item.epoch_idx], dtype=np.float32)
 
         if self._normalize:
             mean = epoch.mean(axis=1, keepdims=True)
             std = epoch.std(axis=1, keepdims=True)
-            std = np.where(std < 1e-8, 1.0, std)
+            std = np.where(std < 1e-2, 1.0, std)
             epoch = (epoch - mean) / std
 
         x = torch.from_numpy(epoch)
@@ -308,7 +308,7 @@ class TUABEpochDataset(Dataset):
         cleanly.
 
         @param path Absolute path to a recording's `.npy` file.
-        @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float64.
+        @return Memory-mapped ndarray of shape (n_epochs, 19, 2500), dtype float16 (uV).
         """
         pid = os.getpid()
         if pid != self._cache_owner_pid:
@@ -429,11 +429,11 @@ def _main() -> None:
 
     manifest = os.environ.get(
         "TUAB_MANIFEST",
-        "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv",
+        "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv",
     )
     data_dir = os.environ.get(
         "TUAB_DATA_DIR",
-        "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train",
+        "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train",
     )
 
     train_loader, val_loader, info = make_train_val_dataloaders(
