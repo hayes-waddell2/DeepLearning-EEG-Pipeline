@@ -1,5 +1,5 @@
 """
-@file train.py
+@file train_b.py
 @brief Training entrypoint for the CNN+LSTM EEG classifier.
 
 @details
@@ -10,9 +10,19 @@ training loop with gradient clipping. Each epoch logs train/val loss and the
 full metric set. The best checkpoint (by val AUC, falling back to accuracy
 when AUC is undefined) is saved for the optional final-eval pass.
 
+Phase 0 / Step 2 additions (no change to model, loss, optimizer or data):
+  - CLI overrides for data dir, output dir, epoch count and a step cap, so job
+    scripts can point at a node-local copy of the data without editing YAML.
+  - Per-step timing split into data-wait (blocked on the DataLoader) and
+    compute (forward/backward/step). `loss.item()` synchronizes the GPU every
+    step, so the split is accurate without extra CUDA syncs.
+  - Per-epoch throughput / timing written to `<output_dir>/benchmark.json`.
+
 @par Usage:
 @verbatim
-python -m src.eeg_cnn_lstm.models.train_b --config configs/demo.yaml
+python -m src.eeg_cnn_lstm.models.train_b --config configs/baseline.yaml
+python -m src.eeg_cnn_lstm.models.train_b --config configs/baseline.yaml \
+    --train-data-dir /tmp/$USER/$SLURM_JOB_ID/train --output-dir runs/bench --num-epochs 1
 @endverbatim
 
 @par Config schema:
@@ -36,6 +46,7 @@ train:
   use_amp: bool               # auto-disabled on CPU
   device: "auto" | "cpu" | "cuda" | "cuda:N"
   output_dir: str             # checkpoints + log written here
+  log_every: int              # optional; steps between throughput logs (default 200)
 eval:
   run_final_eval: bool        # if true, evaluates best checkpoint on eval split
 @endverbatim
@@ -44,9 +55,11 @@ eval:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import random
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -160,14 +173,23 @@ def train_one_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     grad_clip: float,
-) -> float:
+    max_steps: int = 0,
+    log_every: int = 200,
+) -> tuple[float, dict[str, float | int]]:
     """
-    @brief Run one full training epoch with optional mixed precision and grad clipping.
+    @brief Run one training epoch with mixed precision, grad clipping, and timing.
 
     @details
     Loss is computed in autocast scope, scaled, backpropagated, then unscaled
     before gradient clipping so the clip threshold is interpreted in the true
     (un-scaled) loss landscape.
+
+    Timing: for each step, *data wait* is the time the loop is blocked waiting
+    for the DataLoader to yield the next batch; *compute* is everything from
+    receiving the batch to the end of the step. `loss.item()` forces a GPU
+    sync, so compute time is measured accurately. The first batch (which
+    includes worker start-up) is reported separately and excluded from the
+    data-wait share.
 
     @param model The model in train mode.
     @param loader Train DataLoader.
@@ -176,14 +198,34 @@ def train_one_epoch(
     @param scaler `torch.amp.GradScaler`. May be disabled (no-op on CPU).
     @param device Target device for tensors.
     @param grad_clip Max gradient norm. Pass `0.0` to disable.
-    @return Mean per-sample training loss across the epoch.
+    @param max_steps Stop after this many steps (0 = full epoch).
+    @param log_every Log throughput every N steps (0 = never).
+    @return Tuple `(mean_loss, timing_stats)`.
     """
     model.train()
     total_loss = 0.0
     total_samples = 0
     use_amp = scaler.is_enabled()
 
-    for x, y in loader:
+    t_epoch = time.perf_counter()
+    t_prev_end = t_epoch
+    first_batch_s = 0.0
+    data_s = 0.0
+    compute_s = 0.0
+    win_samples = 0
+    win_data_s = 0.0
+    win_start = t_epoch
+    step = 0
+
+    for step, (x, y) in enumerate(loader, start=1):
+        t_ready = time.perf_counter()
+        wait = t_ready - t_prev_end
+        if step == 1:
+            first_batch_s = wait
+        else:
+            data_s += wait
+            win_data_s += wait
+
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
 
@@ -200,10 +242,39 @@ def train_one_epoch(
         scaler.update()
 
         bs = y.size(0)
-        total_loss += loss.item() * bs
+        loss_val = loss.item()  # GPU sync point
+        total_loss += loss_val * bs
         total_samples += bs
+        win_samples += bs
 
-    return total_loss / max(1, total_samples)
+        t_prev_end = time.perf_counter()
+        compute_s += t_prev_end - t_ready
+
+        if log_every and step % log_every == 0:
+            win_s = t_prev_end - win_start
+            logger.info(
+                f"  step {step:>6}  loss={loss_val:.4f}  "
+                f"{win_samples / win_s:,.0f} samples/s  "
+                f"data_wait={win_data_s / win_s:.1%}"
+            )
+            win_samples, win_data_s, win_start = 0, 0.0, t_prev_end
+
+        if max_steps and step >= max_steps:
+            break
+
+    epoch_s = time.perf_counter() - t_epoch
+    steady_s = data_s + compute_s
+    stats = {
+        "steps": step,
+        "samples": total_samples,
+        "epoch_seconds": round(epoch_s, 2),
+        "samples_per_sec": round(total_samples / epoch_s, 1) if epoch_s else 0.0,
+        "first_batch_seconds": round(first_batch_s, 2),
+        "data_wait_seconds": round(data_s, 2),
+        "compute_seconds": round(compute_s, 2),
+        "data_wait_frac": round(data_s / steady_s, 4) if steady_s else 0.0,
+    }
+    return total_loss / max(1, total_samples), stats
 
 
 @torch.no_grad()
@@ -258,11 +329,22 @@ def evaluate(
 # ------------
 
 
-def train(config_path: str) -> None:
+def train(
+    config_path: str,
+    train_data_dir: str | None = None,
+    output_dir: str | None = None,
+    num_epochs: int | None = None,
+    max_steps: int = 0,
+) -> None:
     """
     @brief Run the full training routine driven by a YAML config.
 
     @param config_path Path to the YAML config file.
+    @param train_data_dir Optional override for `data.train_data_dir`
+           (e.g. a node-local staged copy).
+    @param output_dir Optional override for `train.output_dir`.
+    @param num_epochs Optional override for `train.num_epochs`.
+    @param max_steps Optional cap on training steps per epoch (0 = no cap).
     """
     config = load_config(config_path)
 
@@ -271,29 +353,43 @@ def train(config_path: str) -> None:
     train_cfg = config["train"]
     eval_cfg = config.get("eval", {})
 
+    # ---- CLI overrides (recorded in the log for provenance) ----
+    overrides: dict[str, Any] = {}
+    if train_data_dir:
+        data_cfg["train_data_dir"] = overrides["train_data_dir"] = train_data_dir
+    if output_dir:
+        train_cfg["output_dir"] = overrides["output_dir"] = output_dir
+    if num_epochs:
+        train_cfg["num_epochs"] = overrides["num_epochs"] = num_epochs
+    if max_steps:
+        overrides["max_steps"] = max_steps
+
     set_seeds(int(loader_cfg.get("seed", 42)))
     device = select_device(str(train_cfg.get("device", "auto")))
 
-    output_dir = Path(train_cfg.get("output_dir", "outputs"))
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir_p = Path(train_cfg.get("output_dir", "outputs"))
+    output_dir_p.mkdir(parents=True, exist_ok=True)
 
     # ---- Logging ----
     logger.remove()
     logger.add(sys.stderr, level="INFO")
-    logger.add(str(output_dir / "train.log"), level="DEBUG")
+    logger.add(str(output_dir_p / "train.log"), level="DEBUG")
 
     logger.info(f"Config: {config_path}")
+    logger.info(f"CLI overrides: {overrides or 'none'}")
     logger.info(f"Device: {device}")
-    logger.info(f"Output dir: {output_dir.resolve()}")
+    logger.info(f"Train data dir: {data_cfg['train_data_dir']}")
+    logger.info(f"Output dir: {output_dir_p.resolve()}")
 
     # ---- Dataloaders ----
+    num_workers = int(loader_cfg.get("num_workers", 0))
     train_loader, val_loader, info = make_train_val_dataloaders(
         manifest_path=data_cfg["train_manifest"],
         data_dir=data_cfg["train_data_dir"],
         batch_size=int(loader_cfg["batch_size"]),
         val_frac=float(loader_cfg["val_frac"]),
         max_epochs_per_recording=loader_cfg.get("max_epochs_per_recording"),
-        num_workers=int(loader_cfg.get("num_workers", 0)),
+        num_workers=num_workers,
         seed=int(loader_cfg.get("seed", 42)),
     )
     logger.info(f"Split info: {info}")
@@ -313,15 +409,33 @@ def train(config_path: str) -> None:
     use_amp = bool(train_cfg.get("use_amp", True)) and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
     grad_clip = float(train_cfg.get("grad_clip", 1.0))
+    log_every = int(train_cfg.get("log_every", 200))
     logger.info(f"AMP enabled: {use_amp}; grad clip: {grad_clip}")
 
-    # ---- Training loop ----
-    num_epochs = int(train_cfg.get("num_epochs", 2))
-    best_score = -float("inf")
-    best_ckpt_path = output_dir / "best.pt"
+    # ---- Benchmark record ----
+    bench: dict[str, Any] = {
+        "config": config_path,
+        "overrides": overrides,
+        "train_data_dir": data_cfg["train_data_dir"],
+        "device": str(device),
+        "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "batch_size": int(loader_cfg["batch_size"]),
+        "num_workers": num_workers,
+        "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        "stage_seconds": float(os.environ["STAGE_SECONDS"]) if os.environ.get("STAGE_SECONDS") else None,
+        "split_info": info,
+        "epochs": [],
+    }
+    bench_path = output_dir_p / "benchmark.json"
 
-    for epoch in range(1, num_epochs + 1):
-        train_loss = train_one_epoch(
+    # ---- Training loop ----
+    n_epochs = int(train_cfg.get("num_epochs", 2))
+    best_score = -float("inf")
+    best_ckpt_path = output_dir_p / "best.pt"
+
+    for epoch in range(1, n_epochs + 1):
+        train_loss, t_stats = train_one_epoch(
             model,
             train_loader,
             criterion,
@@ -329,14 +443,37 @@ def train(config_path: str) -> None:
             scaler,
             device,
             grad_clip,
+            max_steps=max_steps,
+            log_every=log_every,
         )
+        t_val = time.perf_counter()
         val_loss, val_metrics = evaluate(model, val_loader, criterion, device)
+        val_s = time.perf_counter() - t_val
 
         logger.info(
-            f"Epoch {epoch}/{num_epochs}  "
+            f"Epoch {epoch}/{n_epochs}  "
             f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
             f"{format_metrics(val_metrics, prefix='val')}"
         )
+        logger.info(
+            f"  timing: train {t_stats['epoch_seconds'] / 60:.1f} min "
+            f"({t_stats['samples_per_sec']:,.0f} samples/s, "
+            f"data_wait {t_stats['data_wait_frac']:.1%}, "
+            f"first batch {t_stats['first_batch_seconds']:.1f}s)  "
+            f"val {val_s / 60:.1f} min"
+        )
+
+        bench["epochs"].append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "val_metrics": val_metrics,
+                "train_timing": t_stats,
+                "val_seconds": round(val_s, 2),
+            }
+        )
+        bench_path.write_text(json.dumps(bench, indent=2))
 
         # Track best by AUC; fall back to accuracy when AUC is NaN.
         score = val_metrics.get("auc_roc", float("nan"))
@@ -350,6 +487,7 @@ def train(config_path: str) -> None:
             )
 
     logger.info(f"Training complete. Best val score: {best_score:.4f}")
+    logger.info(f"Benchmark written to {bench_path}")
 
     # ---- Final eval (optional) ----
     if eval_cfg.get("run_final_eval", False):
@@ -358,7 +496,7 @@ def train(config_path: str) -> None:
             manifest_path=data_cfg["eval_manifest"],
             data_dir=data_cfg["eval_data_dir"],
             batch_size=int(loader_cfg["batch_size"]),
-            num_workers=int(loader_cfg.get("num_workers", 0)),
+            num_workers=num_workers,
             seed=int(loader_cfg.get("seed", 42)),
         )
         model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
@@ -370,14 +508,32 @@ def train(config_path: str) -> None:
 def parse_args() -> argparse.Namespace:
     """
     @brief Parse command-line arguments.
-    @return Namespace with `config` attribute pointing to the YAML config path.
+    @return Namespace with the config path and optional overrides.
     """
     parser = argparse.ArgumentParser(description="Train CNN+LSTM EEG classifier")
     parser.add_argument(
         "--config",
         type=str,
         required=True,
-        help="Path to YAML training config (e.g., configs/demo.yaml)",
+        help="Path to YAML training config (e.g., configs/baseline.yaml)",
+    )
+    parser.add_argument(
+        "--train-data-dir",
+        type=str,
+        default=None,
+        help="Override data.train_data_dir (e.g. node-local staged copy)",
+    )
+    parser.add_argument(
+        "--output-dir", type=str, default=None, help="Override train.output_dir"
+    )
+    parser.add_argument(
+        "--num-epochs", type=int, default=None, help="Override train.num_epochs"
+    )
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=0,
+        help="Cap training steps per epoch (0 = full epoch); for quick smoke tests",
     )
     return parser.parse_args()
 
@@ -385,7 +541,13 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """@brief CLI entrypoint."""
     args = parse_args()
-    train(args.config)
+    train(
+        args.config,
+        train_data_dir=args.train_data_dir,
+        output_dir=args.output_dir,
+        num_epochs=args.num_epochs,
+        max_steps=args.max_steps,
+    )
 
 
 if __name__ == "__main__":
