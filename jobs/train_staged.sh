@@ -59,7 +59,9 @@ df -h /tmp
 # ---- Stage data to node-local disk ----
 echo "Staging ${SRC_DATA} -> ${LOCAL}/train ..."
 t0=$(date +%s)
-rsync -a "${SRC_DATA}/" "${LOCAL}/train/"
+mkdir -p "${LOCAL}/train"
+find "${SRC_DATA}" -maxdepth 1 -name '*.npy' -print0 \
+    | xargs -0 -P 8 -n 32 cp -t "${LOCAL}/train/"
 t1=$(date +%s)
 export STAGE_SECONDS=$((t1 - t0))
 echo "Staged $(du -sh "${LOCAL}/train" | cut -f1) in ${STAGE_SECONDS}s"
