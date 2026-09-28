@@ -157,7 +157,7 @@ def test_edf_channel_names_match_tuh_format():
 ## Verifies that extract_label() correctly reads 0 for files under normal/ and
 # 1 for files under abnormal/.
 def test_label_extraction_from_directory_structure():
-    from src.preprocessing.preprocessing import extract_label
+    from eeg_cnn_lstm.preprocessing.preprocessing import extract_label
 
     for split in ["train", "eval"]:
         normal_edfs = list((SAMPLE_DATA_DIR / split / "normal").rglob("*.edf"))
@@ -181,7 +181,7 @@ def test_label_extraction_from_directory_structure():
 #
 # Expected output: (n_epochs, 19, 2500) — 19 channels, 2500 samples at 250 Hz.
 def test_full_pipeline_produces_valid_epochs(tmp_path):
-    from src.preprocessing.preprocessing import (
+    from eeg_cnn_lstm.preprocessing.preprocessing import (
         load_edf,
         clean_channel_names,
         remove_non_eeg_channels,
@@ -218,7 +218,7 @@ def test_full_pipeline_produces_valid_epochs(tmp_path):
 
 ## Verifies that the channel names after preprocessing match the standard 10-20 set.
 def test_pipeline_channel_names_after_preprocessing():
-    from src.preprocessing.preprocessing import (
+    from eeg_cnn_lstm.preprocessing.preprocessing import (
         load_edf,
         clean_channel_names,
         remove_non_eeg_channels,
@@ -241,7 +241,7 @@ def test_pipeline_channel_names_after_preprocessing():
 
 ## Verifies that the final resampled recording is at 250 Hz.
 def test_pipeline_resamples_to_250hz():
-    from src.preprocessing.preprocessing import (
+    from eeg_cnn_lstm.preprocessing.preprocessing import (
         load_edf,
         clean_channel_names,
         remove_non_eeg_channels,
@@ -266,7 +266,7 @@ def test_pipeline_resamples_to_250hz():
 
 ## Verifies that save_epochs produces a valid .npy file with the correct array shape.
 def test_pipeline_saves_valid_npy(tmp_path):
-    from src.preprocessing.preprocessing import (
+    from eeg_cnn_lstm.preprocessing.preprocessing import (
         load_edf,
         clean_channel_names,
         remove_non_eeg_channels,

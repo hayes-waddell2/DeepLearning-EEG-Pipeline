@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.utils.dataset import load_manifest
+from eeg_cnn_lstm.utils.dataset import load_manifest
 
 ## @brief Expected TUAB anonymized subject ID format.
 SUBJECT_RE = re.compile(r"^[a-z]{8}$")

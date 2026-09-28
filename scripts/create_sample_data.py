@@ -182,7 +182,7 @@ def create_sample_dataset(
     print(f"  Eval:  {n_normal} normal, {n_abnormal} abnormal")
     print(
         f"\nPass the train split to preprocessing.py with:\n"
-        f"  python src/preprocessing/preprocessing.py "
+        f"  python -m eeg_cnn_lstm.preprocessing.preprocessing "
         f"--input {output_dir / 'edf' / 'train'} --output data/processed"
     )
 

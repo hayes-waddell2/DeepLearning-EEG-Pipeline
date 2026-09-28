@@ -419,7 +419,7 @@ def _main() -> None:
     @brief Minimal CLI smoke test: load one batch and print its shapes.
 
     @details
-    Run as `python -m src.utils.dataset` from the project root. Override the
+    Run as `python -m eeg_cnn_lstm.utils.dataset` from the project root. Override the
     default paths via environment variables `TUAB_MANIFEST` and `TUAB_DATA_DIR`.
     Note the doubled `train/train/` quirk in the cluster's on-disk layout —
     `data_dir` should point to the inner folder containing the `.npy` files,

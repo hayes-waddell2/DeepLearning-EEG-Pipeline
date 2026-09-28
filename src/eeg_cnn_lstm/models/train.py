@@ -1,5 +1,5 @@
 """
-@file train_b.py
+@file train.py
 @brief Training entrypoint for the CNN+LSTM EEG classifier.
 
 @details
@@ -28,8 +28,8 @@ FP32's dynamic range and does not. Evaluation always runs in FP32.
 
 @par Usage:
 @verbatim
-python -m src.eeg_cnn_lstm.models.train_b --config configs/baseline.yaml
-python -m src.eeg_cnn_lstm.models.train_b --config configs/baseline.yaml \
+python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml
+python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml \
     --train-data-dir /tmp/$USER/$SLURM_JOB_ID/train --output-dir runs/bench --num-epochs 1
 @endverbatim
 
@@ -79,13 +79,13 @@ import yaml
 from loguru import logger
 from torch.utils.data import DataLoader
 
-from src.utils.dataset import (
+from eeg_cnn_lstm.utils.dataset import (
     TUABEpochDataset,
     load_manifest,
     make_train_val_dataloaders,
 )
-from src.utils.metrics import compute_metrics, format_metrics
-from src.eeg_cnn_lstm.models.model_b import CNN_LSTM, ModelConfig
+from eeg_cnn_lstm.utils.metrics import compute_metrics, format_metrics
+from eeg_cnn_lstm.models.model import CNN_LSTM, ModelConfig
 
 ## @brief Supported autocast dtypes, selected by `train.amp_dtype`.
 AMP_DTYPES: dict[str, torch.dtype] = {

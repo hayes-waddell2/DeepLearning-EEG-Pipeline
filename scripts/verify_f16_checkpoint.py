@@ -39,9 +39,9 @@ import torch
 import yaml
 from torch.utils.data import DataLoader
 
-from src.eeg_cnn_lstm.models.model_b import CNN_LSTM, ModelConfig
-from src.utils.dataset import TUABEpochDataset, build_subject_disjoint_split, load_manifest
-from src.utils.metrics import compute_metrics
+from eeg_cnn_lstm.models.model import CNN_LSTM, ModelConfig
+from eeg_cnn_lstm.utils.dataset import TUABEpochDataset, build_subject_disjoint_split, load_manifest
+from eeg_cnn_lstm.utils.metrics import compute_metrics
 
 EXPECTED_BASELINE_AUC = 0.8851
 AUC_TOLERANCE = 0.002

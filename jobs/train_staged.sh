@@ -16,7 +16,7 @@
 # Environment variables (optional, pass with --export=ALL,VAR=value):
 #   CONFIG   YAML config            (default: configs/baseline.yaml)
 #   RUN_DIR  output directory       (default: runs/<job-name>_<job-id>)
-# Extra arguments are passed to train_b.py, e.g. --num-epochs 1
+# Extra arguments are passed to train.py, e.g. --num-epochs 1
 #
 # Phase 0 / Step 2 benchmark:
 #   sbatch --job-name=bench-f16-staged jobs/train_staged.sh --num-epochs 1
@@ -72,7 +72,7 @@ nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used \
 GPU_LOG_PID=$!
 
 # ---- Train ----
-python -u -m src.eeg_cnn_lstm.models.train_b \
+python -u -m eeg_cnn_lstm.models.train \
     --config "${CONFIG}" \
     --train-data-dir "${LOCAL}/train" \
     --output-dir "${RUN_DIR}" \

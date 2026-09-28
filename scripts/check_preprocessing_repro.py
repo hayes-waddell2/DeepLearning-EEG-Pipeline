@@ -19,7 +19,7 @@ dataset can be regenerated from the raw EDFs with version-controlled code.
 @par Usage (from repo root; normally via jobs/check_repro.sh):
 @verbatim
 python -m scripts.check_preprocessing_repro --n-files 4
-python -m scripts.check_preprocessing_repro --module src.preprocessing.preprocessing
+python -m scripts.check_preprocessing_repro --module eeg_cnn_lstm.preprocessing.preprocessing
 @endverbatim
 """
 
