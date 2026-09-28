@@ -1,0 +1,110 @@
+{
+  "created_utc": "2026-09-28T21:52:34.603878+00:00",
+  "manifest": "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv",
+  "split_csv": "/shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv",
+  "split_csv_sha256": "ed010bad971c67bb05eacfa8ffe9c79849a50e0d83ee3f2db0c66b44964fb566",
+  "seed": 42,
+  "tune_frac": 0.2,
+  "stratified_on": "recording label",
+  "grouped_by": "subject_id",
+  "splitter": "sklearn.model_selection.StratifiedGroupKFold",
+  "sklearn_version": "1.8.0",
+  "git_commit": "79f0407cbc735fb07a0b9076ac5dcca9dbcb46eb",
+  "host": "sporcsubmit.rc.rit.edu",
+  "counts": {
+    "total": {
+      "recordings": 2717,
+      "patients": 2076,
+      "segments": 743578,
+      "abnormal_recordings": 1346,
+      "abnormal_frac": 0.4954
+    },
+    "tuning_pool_T": {
+      "recordings": 544,
+      "patients": 413,
+      "segments": 146351,
+      "abnormal_recordings": 270,
+      "abnormal_frac": 0.4963
+    },
+    "cv_pool_E": {
+      "recordings": 2173,
+      "patients": 1663,
+      "segments": 597227,
+      "abnormal_recordings": 1076,
+      "abnormal_frac": 0.4952
+    },
+    "folds": {
+      "0": {
+        "recordings": 218,
+        "patients": 167,
+        "segments": 59317,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4954
+      },
+      "1": {
+        "recordings": 218,
+        "patients": 165,
+        "segments": 59645,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4954
+      },
+      "2": {
+        "recordings": 218,
+        "patients": 163,
+        "segments": 61378,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4954
+      },
+      "3": {
+        "recordings": 218,
+        "patients": 167,
+        "segments": 58450,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4954
+      },
+      "4": {
+        "recordings": 218,
+        "patients": 168,
+        "segments": 62452,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4954
+      },
+      "5": {
+        "recordings": 216,
+        "patients": 169,
+        "segments": 61671,
+        "abnormal_recordings": 107,
+        "abnormal_frac": 0.4954
+      },
+      "6": {
+        "recordings": 216,
+        "patients": 164,
+        "segments": 57724,
+        "abnormal_recordings": 107,
+        "abnormal_frac": 0.4954
+      },
+      "7": {
+        "recordings": 217,
+        "patients": 167,
+        "segments": 58538,
+        "abnormal_recordings": 107,
+        "abnormal_frac": 0.4931
+      },
+      "8": {
+        "recordings": 217,
+        "patients": 166,
+        "segments": 58389,
+        "abnormal_recordings": 107,
+        "abnormal_frac": 0.4931
+      },
+      "9": {
+        "recordings": 217,
+        "patients": 167,
+        "segments": 59663,
+        "abnormal_recordings": 108,
+        "abnormal_frac": 0.4977
+      }
+    },
+    "n_folds": 10
+  }
+}
