@@ -18,6 +18,10 @@ Phase 0 / Step 2 additions (no change to model, loss, optimizer or data):
     step, so the split is accurate without extra CUDA syncs.
   - Per-epoch throughput / timing written to `<output_dir>/benchmark.json`.
 
+Phase 0 / Step 3: mixed precision is BF16 (`dtype=torch.bfloat16`) and the
+GradScaler is disabled. BF16 has FP32's dynamic range, so loss scaling is
+unnecessary and no steps are skipped for overflow. Evaluation runs in FP32.
+
 @par Usage:
 @verbatim
 python -m src.eeg_cnn_lstm.models.train_b --config configs/baseline.yaml
@@ -43,7 +47,7 @@ train:
   lr: float
   weight_decay: float
   grad_clip: float            # 0.0 disables
-  use_amp: bool               # auto-disabled on CPU
+  use_amp: bool            # auto-disabled on CPU
   device: "auto" | "cpu" | "cuda" | "cuda:N"
   output_dir: str             # checkpoints + log written here
   log_every: int              # optional; steps between throughput logs (default 200)
@@ -173,6 +177,7 @@ def train_one_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     grad_clip: float,
+    use_amp: bool = False,
     max_steps: int = 0,
     log_every: int = 200,
 ) -> tuple[float, dict[str, float | int]]:
@@ -180,9 +185,10 @@ def train_one_epoch(
     @brief Run one training epoch with mixed precision, grad clipping, and timing.
 
     @details
-    Loss is computed in autocast scope, scaled, backpropagated, then unscaled
-    before gradient clipping so the clip threshold is interpreted in the true
-    (un-scaled) loss landscape.
+    Loss is computed in BF16 autocast scope and backpropagated. The GradScaler
+    is disabled (BF16 has FP32's dynamic range, so loss scaling is
+    unnecessary), which makes `scale`/`unscale_`/`step`/`update` pass-throughs;
+    gradients are therefore clipped at their true scale.
 
     Timing: for each step, *data wait* is the time the loop is blocked waiting
     for the DataLoader to yield the next batch; *compute* is everything from
@@ -195,7 +201,8 @@ def train_one_epoch(
     @param loader Train DataLoader.
     @param criterion Binary classification loss (e.g., `BCEWithLogitsLoss`).
     @param optimizer Optimizer (e.g., `AdamW`).
-    @param scaler `torch.amp.GradScaler`. May be disabled (no-op on CPU).
+    @param scaler `torch.amp.GradScaler`, disabled under BF16 (pass-through).
+    @param use_amp Whether to run the forward pass in BF16 autocast.
     @param device Target device for tensors.
     @param grad_clip Max gradient norm. Pass `0.0` to disable.
     @param max_steps Stop after this many steps (0 = full epoch).
@@ -205,7 +212,6 @@ def train_one_epoch(
     model.train()
     total_loss = 0.0
     total_samples = 0
-    use_amp = scaler.is_enabled()
 
     t_epoch = time.perf_counter()
     t_prev_end = t_epoch
@@ -230,7 +236,7 @@ def train_one_epoch(
         y = y.to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(device_type=device.type, enabled=use_amp):
+        with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
             logits = model(x)
             loss = criterion(logits, y)
 
@@ -407,10 +413,11 @@ def train(
     criterion = nn.BCEWithLogitsLoss()
 
     use_amp = bool(train_cfg.get("use_amp", True)) and device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
     grad_clip = float(train_cfg.get("grad_clip", 1.0))
     log_every = int(train_cfg.get("log_every", 200))
-    logger.info(f"AMP enabled: {use_amp}; grad clip: {grad_clip}")
+    amp_dtype = "bfloat16" if use_amp else "fp32"
+    logger.info(f"AMP: {amp_dtype} (GradScaler disabled); grad clip: {grad_clip}")
 
     # ---- Benchmark record ----
     bench: dict[str, Any] = {
@@ -418,6 +425,7 @@ def train(
         "overrides": overrides,
         "train_data_dir": data_cfg["train_data_dir"],
         "device": str(device),
+        "amp_dtype": amp_dtype,
         "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "batch_size": int(loader_cfg["batch_size"]),
         "num_workers": num_workers,
@@ -443,6 +451,7 @@ def train(
             scaler,
             device,
             grad_clip,
+            use_amp=use_amp,
             max_steps=max_steps,
             log_every=log_every,
         )
