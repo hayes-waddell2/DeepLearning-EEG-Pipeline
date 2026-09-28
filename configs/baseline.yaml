@@ -12,6 +12,9 @@ loader:
   val_frac: 0.2
   max_epochs_per_recording: null     # use every epoch
   num_workers: 8
+  normalize: uv_scale
+  norm_stats: configs/norm_stats_tuab.json
+  clip_uv: 800.0
   seed: 42
 
 train:

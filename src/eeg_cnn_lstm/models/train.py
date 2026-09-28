@@ -26,6 +26,16 @@ from ~6,100 to ~615 samples/s (~9x slower) at identical validation AUC. The
 GradScaler is enabled only for FP16, which needs dynamic loss scaling; BF16 has
 FP32's dynamic range and does not. Evaluation always runs in FP32.
 
+Phase 1 additions:
+  - Batches are `(x, y, rec_idx)`; `rec_idx` is ignored here but is what
+    recording-level aggregation will use once metrics move to the recording
+    level. Unpacked as `_` so this loop stays valid either way.
+  - `set_epoch()` is called on the training dataset each epoch, so a capped
+    training set draws a fresh subset of segments per epoch instead of reusing
+    the same one.
+  - Normalization is selectable from the config (`loader.normalize`), for the
+    z-score vs fixed-microvolt A/B.
+
 @par Usage:
 @verbatim
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml
@@ -43,9 +53,13 @@ data:
 loader:
   batch_size: int
   val_frac: float
-  max_epochs_per_recording: int | null
+  max_epochs_per_recording: int | null   # TRAINING segment cap; val always uses all
   num_workers: int
   seed: int
+  normalize: "zscore" | "uv_scale" | "none"   # optional; default zscore
+  norm_stats: <path>          # required when normalize = uv_scale
+  clip_uv: float              # optional override for uv_scale
+  resample_each_epoch: bool   # optional; redraw the capped subset each epoch
 train:
   num_epochs: int
   lr: float
@@ -141,27 +155,38 @@ def build_eval_loader(
     batch_size: int,
     num_workers: int,
     seed: int,
+    normalize: str = "zscore",
+    norm_stats: Any = None,
+    clip_uv: float | None = None,
 ) -> DataLoader:
     """
     @brief Build a DataLoader over an entire manifest with no internal split.
 
     @details
     Used for the final eval pass on the held-out test set. Unlike
-    `make_train_val_dataloaders`, this does not split by subject; it returns
-    one loader covering every recording in the manifest.
+    `make_train_val_dataloaders`, this does not split by subject; it returns one
+    loader covering every recording, using every segment of each recording.
+    Normalization must match the training configuration, so the same options
+    are threaded through.
 
     @param manifest_path Path to the eval manifest CSV.
     @param data_dir Directory containing the eval `.npy` files.
     @param batch_size Mini-batch size.
     @param num_workers DataLoader worker count.
     @param seed RNG seed (unused for eval but kept for parity).
-    @return DataLoader yielding (x, y) pairs from the eval set.
+    @param normalize Normalization mode; must match training.
+    @param norm_stats Stats JSON path/dict, required for `"uv_scale"`.
+    @param clip_uv Clip threshold override for `"uv_scale"`.
+    @return DataLoader yielding `(x, y, rec_idx)` from the eval set.
     """
     manifest = load_manifest(manifest_path)
     dataset = TUABEpochDataset(
         manifest,
         data_dir,
-        max_epochs_per_recording=None,
+        segments_per_recording=None,
+        normalize=normalize,
+        norm_stats=norm_stats,
+        clip_uv=clip_uv,
         seed=seed,
     )
     return DataLoader(
@@ -204,6 +229,9 @@ def train_one_epoch(
     `scale`/`unscale_`/`step`/`update` are pass-throughs, so the same code path
     clips true-scale gradients either way.
 
+    Batches are `(x, y, rec_idx)`; the recording index is unused during training
+    and discarded here.
+
     Timing: for each step, *data wait* is the time the loop is blocked waiting
     for the DataLoader to yield the next batch; *compute* is everything from
     receiving the batch to the end of the step. `loss.item()` forces a GPU
@@ -238,7 +266,7 @@ def train_one_epoch(
     win_start = t_epoch
     step = 0
 
-    for step, (x, y) in enumerate(loader, start=1):
+    for step, (x, y, _) in enumerate(loader, start=1):
         t_ready = time.perf_counter()
         wait = t_ready - t_prev_end
         if step == 1:
@@ -308,13 +336,16 @@ def evaluate(
     device: torch.device,
 ) -> tuple[float, dict[str, float | int]]:
     """
-    @brief Run a full evaluation pass (FP32) and compute classification metrics.
+    @brief Run a full evaluation pass (FP32) and compute segment-level metrics.
 
     @details
     Accumulates logits and labels across all batches, then calls
     `compute_metrics` once on the full set. Avoids per-batch metric noise.
     No autocast is used here: evaluation is cheap relative to training and
     FP32 keeps the logits (and therefore the metrics) precision-independent.
+
+    Recording indices are discarded for now; recording-level aggregation is
+    added with the Phase 1 metrics module.
 
     @param model The model in eval mode.
     @param loader Eval / val DataLoader.
@@ -328,7 +359,7 @@ def evaluate(
     all_logits: list[torch.Tensor] = []
     all_labels: list[torch.Tensor] = []
 
-    for x, y in loader:
+    for x, y, _ in loader:
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
         logits = model(x)
@@ -408,6 +439,10 @@ def train(
 
     # ---- Dataloaders ----
     num_workers = int(loader_cfg.get("num_workers", 0))
+    normalize = str(loader_cfg.get("normalize", "zscore"))
+    norm_stats = loader_cfg.get("norm_stats")
+    clip_uv = loader_cfg.get("clip_uv")
+    resample_each_epoch = bool(loader_cfg.get("resample_each_epoch", False))
     train_loader, val_loader, info = make_train_val_dataloaders(
         manifest_path=data_cfg["train_manifest"],
         data_dir=data_cfg["train_data_dir"],
@@ -416,8 +451,14 @@ def train(
         max_epochs_per_recording=loader_cfg.get("max_epochs_per_recording"),
         num_workers=num_workers,
         seed=int(loader_cfg.get("seed", 42)),
+        normalize=normalize,
+        norm_stats=norm_stats,
+        clip_uv=clip_uv,
+        resample_each_epoch=resample_each_epoch,
     )
     logger.info(f"Split info: {info}")
+    logger.info(f"Train dataset: {train_loader.dataset.describe()}")
+    logger.info(f"Val dataset:   {val_loader.dataset.describe()}")
 
     # ---- Model ----
     model = CNN_LSTM(ModelConfig()).to(device)
@@ -465,6 +506,9 @@ def train(
         "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "batch_size": int(loader_cfg["batch_size"]),
         "num_workers": num_workers,
+        "normalize": normalize,
+        "clip_uv": clip_uv,
+        "resample_each_epoch": resample_each_epoch,
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "stage_seconds": float(os.environ["STAGE_SECONDS"]) if os.environ.get("STAGE_SECONDS") else None,
@@ -479,6 +523,11 @@ def train(
     best_ckpt_path = output_dir_p / "best.pt"
 
     for epoch in range(1, n_epochs + 1):
+        # Redraw the per-recording segment subset (no-op unless the training set
+        # has a cap and resample_each_epoch is on).
+        if hasattr(train_loader.dataset, "set_epoch"):
+            train_loader.dataset.set_epoch(epoch - 1)
+
         train_loss, t_stats = train_one_epoch(
             model,
             train_loader,
@@ -544,6 +593,9 @@ def train(
             batch_size=int(loader_cfg["batch_size"]),
             num_workers=num_workers,
             seed=int(loader_cfg.get("seed", 42)),
+            normalize=normalize,
+            norm_stats=norm_stats,
+            clip_uv=clip_uv,
         )
         model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
         test_loss, test_metrics = evaluate(model, eval_loader, criterion, device)
