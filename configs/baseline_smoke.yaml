@@ -3,8 +3,8 @@
 # subsampled so the full pipeline runs end-to-end in ~5-10 minutes.
 
 data:
-  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv
-  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
 
 loader:
   batch_size: 64
