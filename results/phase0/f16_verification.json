@@ -1,0 +1,42 @@
+{
+  "numerical": {
+    "n_segments_checked": 500,
+    "max_abs_diff_zscore_units": 0.006122589111328125,
+    "mean_abs_diff_zscore_units": 0.0001367970647115726
+  },
+  "functional": {
+    "old": {
+      "accuracy": 0.7705012421074423,
+      "auc_roc": 0.8850619654696241,
+      "f1": 0.7314066794369951,
+      "tp": 48301,
+      "fp": 3470,
+      "fn": 32005,
+      "tn": 70800,
+      "n_pos": 80306,
+      "n_neg": 74270
+    },
+    "new": {
+      "accuracy": 0.7704753648690612,
+      "auc_roc": 0.8850619689067264,
+      "f1": 0.7313885965642816,
+      "tp": 48302,
+      "fp": 3475,
+      "fn": 32004,
+      "tn": 70795,
+      "n_pos": 80306,
+      "n_neg": 74270
+    },
+    "delta_auc": 3.437102269465697e-09,
+    "max_abs_logit_diff": 1.0990688800811768,
+    "mean_abs_prob_diff": 3.8453523302450776e-05,
+    "prediction_flips": 8,
+    "prediction_flip_rate": 5.1754476762239936e-05,
+    "old_auc_matches_baseline": true
+  },
+  "passed": true,
+  "auc_tolerance": 0.002,
+  "checkpoint": "/shared/rc/eeg-cnn-lstm/runs/baseline_v1/best.pt",
+  "old_data_dir": "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train",
+  "new_data_dir": "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train"
+}
