@@ -20,6 +20,7 @@ train:
   weight_decay: 1.0e-4
   grad_clip: 1.0
   use_amp: true
+  amp_dtype: fp16
   device: cuda
   output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_v1
 

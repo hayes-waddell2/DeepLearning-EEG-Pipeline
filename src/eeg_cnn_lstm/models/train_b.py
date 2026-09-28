@@ -18,9 +18,13 @@ Phase 0 / Step 2 additions (no change to model, loss, optimizer or data):
     step, so the split is accurate without extra CUDA syncs.
   - Per-epoch throughput / timing written to `<output_dir>/benchmark.json`.
 
-Phase 0 / Step 3: mixed precision is BF16 (`dtype=torch.bfloat16`) and the
-GradScaler is disabled. BF16 has FP32's dynamic range, so loss scaling is
-unnecessary and no steps are skipped for overflow. Evaluation runs in FP32.
+Phase 0 / Step 3 (autocast dtype): the precision is selected by
+`train.amp_dtype` ("fp16" or "bf16"); FP16 is the default and BF16 must not be
+used with this architecture. cuDNN provides no fused BF16 LSTM kernel, so BF16
+autocast falls back to an unfused per-timestep path: measured throughput drops
+from ~6,100 to ~615 samples/s (~9x slower) at identical validation AUC. The
+GradScaler is enabled only for FP16, which needs dynamic loss scaling; BF16 has
+FP32's dynamic range and does not. Evaluation always runs in FP32.
 
 @par Usage:
 @verbatim
@@ -47,7 +51,8 @@ train:
   lr: float
   weight_decay: float
   grad_clip: float            # 0.0 disables
-  use_amp: bool            # auto-disabled on CPU
+  use_amp: bool               # auto-disabled on CPU
+  amp_dtype: "fp16" | "bf16"  # optional; default fp16 (bf16 is ~9x slower here)
   device: "auto" | "cpu" | "cuda" | "cuda:N"
   output_dir: str             # checkpoints + log written here
   log_every: int              # optional; steps between throughput logs (default 200)
@@ -81,6 +86,12 @@ from src.utils.dataset import (
 )
 from src.utils.metrics import compute_metrics, format_metrics
 from src.eeg_cnn_lstm.models.model_b import CNN_LSTM, ModelConfig
+
+## @brief Supported autocast dtypes, selected by `train.amp_dtype`.
+AMP_DTYPES: dict[str, torch.dtype] = {
+    "fp16": torch.float16,
+    "bf16": torch.bfloat16,
+}
 
 # --------------
 # Set up helpers
@@ -178,6 +189,7 @@ def train_one_epoch(
     device: torch.device,
     grad_clip: float,
     use_amp: bool = False,
+    amp_dtype: torch.dtype = torch.float16,
     max_steps: int = 0,
     log_every: int = 200,
 ) -> tuple[float, dict[str, float | int]]:
@@ -185,10 +197,12 @@ def train_one_epoch(
     @brief Run one training epoch with mixed precision, grad clipping, and timing.
 
     @details
-    Loss is computed in BF16 autocast scope and backpropagated. The GradScaler
-    is disabled (BF16 has FP32's dynamic range, so loss scaling is
-    unnecessary), which makes `scale`/`unscale_`/`step`/`update` pass-throughs;
-    gradients are therefore clipped at their true scale.
+    The forward pass runs in `amp_dtype` autocast (FP16 by default). Under FP16
+    the GradScaler is enabled: the loss is scaled, backpropagated, then unscaled
+    before gradient clipping, so the clip threshold applies to the true
+    (un-scaled) gradients. Under BF16 (or FP32) the scaler is disabled and
+    `scale`/`unscale_`/`step`/`update` are pass-throughs, so the same code path
+    clips true-scale gradients either way.
 
     Timing: for each step, *data wait* is the time the loop is blocked waiting
     for the DataLoader to yield the next batch; *compute* is everything from
@@ -201,10 +215,11 @@ def train_one_epoch(
     @param loader Train DataLoader.
     @param criterion Binary classification loss (e.g., `BCEWithLogitsLoss`).
     @param optimizer Optimizer (e.g., `AdamW`).
-    @param scaler `torch.amp.GradScaler`, disabled under BF16 (pass-through).
-    @param use_amp Whether to run the forward pass in BF16 autocast.
+    @param scaler `torch.amp.GradScaler`; enabled for FP16, pass-through otherwise.
     @param device Target device for tensors.
     @param grad_clip Max gradient norm. Pass `0.0` to disable.
+    @param use_amp Whether to run the forward pass under autocast.
+    @param amp_dtype Autocast dtype (`torch.float16` or `torch.bfloat16`).
     @param max_steps Stop after this many steps (0 = full epoch).
     @param log_every Log throughput every N steps (0 = never).
     @return Tuple `(mean_loss, timing_stats)`.
@@ -236,7 +251,9 @@ def train_one_epoch(
         y = y.to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_amp):
+        with torch.amp.autocast(
+            device_type=device.type, dtype=amp_dtype, enabled=use_amp
+        ):
             logits = model(x)
             loss = criterion(logits, y)
 
@@ -291,11 +308,13 @@ def evaluate(
     device: torch.device,
 ) -> tuple[float, dict[str, float | int]]:
     """
-    @brief Run a full evaluation pass and compute classification metrics.
+    @brief Run a full evaluation pass (FP32) and compute classification metrics.
 
     @details
     Accumulates logits and labels across all batches, then calls
     `compute_metrics` once on the full set. Avoids per-batch metric noise.
+    No autocast is used here: evaluation is cheap relative to training and
+    FP32 keeps the logits (and therefore the metrics) precision-independent.
 
     @param model The model in eval mode.
     @param loader Eval / val DataLoader.
@@ -413,11 +432,28 @@ def train(
     criterion = nn.BCEWithLogitsLoss()
 
     use_amp = bool(train_cfg.get("use_amp", True)) and device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda", enabled=False)
+    amp_dtype_name = str(train_cfg.get("amp_dtype", "fp16")).lower()
+    if amp_dtype_name not in AMP_DTYPES:
+        raise ValueError(
+            f"train.amp_dtype must be one of {sorted(AMP_DTYPES)}; got {amp_dtype_name!r}"
+        )
+    amp_dtype = AMP_DTYPES[amp_dtype_name]
+    # FP16 needs dynamic loss scaling; BF16 has FP32's range and does not.
+    scaler = torch.amp.GradScaler(
+        "cuda", enabled=use_amp and amp_dtype is torch.float16
+    )
     grad_clip = float(train_cfg.get("grad_clip", 1.0))
     log_every = int(train_cfg.get("log_every", 200))
-    amp_dtype = "bfloat16" if use_amp else "fp32"
-    logger.info(f"AMP: {amp_dtype} (GradScaler disabled); grad clip: {grad_clip}")
+    precision = amp_dtype_name if use_amp else "fp32"
+    logger.info(
+        f"AMP: {precision} (GradScaler "
+        f"{'on' if scaler.is_enabled() else 'off'}); grad clip: {grad_clip}"
+    )
+    if use_amp and amp_dtype is torch.bfloat16:
+        logger.warning(
+            "bf16 autocast disables the fused cuDNN LSTM kernel; expect ~9x "
+            "slower training with this architecture."
+        )
 
     # ---- Benchmark record ----
     bench: dict[str, Any] = {
@@ -425,7 +461,7 @@ def train(
         "overrides": overrides,
         "train_data_dir": data_cfg["train_data_dir"],
         "device": str(device),
-        "amp_dtype": amp_dtype,
+        "amp_dtype": precision,
         "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "batch_size": int(loader_cfg["batch_size"]),
         "num_workers": num_workers,
@@ -452,6 +488,7 @@ def train(
             device,
             grad_clip,
             use_amp=use_amp,
+            amp_dtype=amp_dtype,
             max_steps=max_steps,
             log_every=log_every,
         )
