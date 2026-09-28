@@ -301,7 +301,11 @@ def test_pipeline_saves_valid_npy(tmp_path):
         f"Saved array shape {saved.shape} does not match "
         f"epochs shape {epochs.get_data().shape}."
     )
-    assert saved.dtype in [
-        np.float32,
-        np.float64,
-    ], f"Unexpected dtype {saved.dtype}. Expected float32 or float64."
+    assert saved.dtype == np.float16, (
+        f"Unexpected dtype {saved.dtype}. Expected float16 (Phase 0: "
+        "segments are stored as float16 microvolts)."
+    )
+    # uV scale check: volts (~1e-5) would round to ~0 in float16
+    assert np.nanmax(np.abs(saved.astype(np.float32))) > 1.0, (
+         "Values look like volts, not microvolts."
+    )
