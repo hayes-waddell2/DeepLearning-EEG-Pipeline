@@ -1,16 +1,17 @@
-# configs/baseline.yaml
-# Real TUAB training run on the cluster A100.
-# Eval set is intentionally untouched (run_final_eval: false).
+# configs/baseline_uvscale.yaml
+# A/B arm B: fixed microvolt normalization. Identical to baseline.yaml except
+# for the three loader.normalize* keys and output_dir, so the comparison
+# isolates the normalization choice.
+# Stats from scripts/compute_norm_stats.py (estimated on pool T only).
 
 data:
   train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
   train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
-  # eval_* paths intentionally omitted — eval.run_final_eval is false.
 
 loader:
   batch_size: 64
   val_frac: 0.2
-  max_epochs_per_recording: null     # use every epoch
+  max_epochs_per_recording: null
   num_workers: 8
   normalize: uv_scale
   norm_stats: configs/norm_stats_tuab.json
@@ -25,8 +26,7 @@ train:
   use_amp: true
   amp_dtype: fp16
   device: cuda
-  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_v1
+  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_uvscale
 
 eval:
-  run_final_eval: false              # do NOT touch eval data
-# A/B arm: fixed microvolt normalization (see scripts/compute_norm_stats.py)
+  run_final_eval: false

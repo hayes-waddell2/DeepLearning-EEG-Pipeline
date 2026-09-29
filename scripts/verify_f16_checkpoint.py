@@ -69,7 +69,7 @@ def collect_logits(
     )
     model.eval()
     logits, labels = [], []
-    for x, y in loader:
+    for x, y, _ in loader:
         logits.append(model(x.to(device, non_blocking=True)).float().cpu())
         labels.append(y)
     return torch.cat(logits), torch.cat(labels)
