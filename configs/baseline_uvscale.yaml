@@ -7,6 +7,7 @@
 data:
   train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
   train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
+  splits_csv: /shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv
 
 loader:
   batch_size: 64
@@ -27,6 +28,8 @@ train:
   amp_dtype: fp16
   device: cuda
   output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_uvscale
+  select_metric: recording_pauc
+  aggregator: mean            # swept post-hoc from predictions_tune.npz
 
 eval:
   run_final_eval: false

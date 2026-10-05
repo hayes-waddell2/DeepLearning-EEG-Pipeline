@@ -4,11 +4,10 @@
 
 @details
 One-command training script for the TUH EEG Abnormal Corpus binary classifier.
-Reads all settings from a YAML config, builds subject-disjoint train/val
-DataLoaders, instantiates the CNN+LSTM model, and runs a mixed-precision
-training loop with gradient clipping. Each epoch logs train/val loss and the
-full metric set. The best checkpoint (by val AUC, falling back to accuracy
-when AUC is undefined) is saved for the optional final-eval pass.
+Reads all settings from a YAML config, builds the DataLoaders, instantiates the
+CNN+LSTM model, and runs a mixed-precision training loop with gradient
+clipping. Each epoch logs loss plus segment-level and recording-level metrics,
+and the best checkpoint is saved.
 
 Phase 0 / Step 2 additions (no change to model, loss, optimizer or data):
   - CLI overrides for data dir, output dir, epoch count and a step cap, so job
@@ -27,18 +26,29 @@ GradScaler is enabled only for FP16, which needs dynamic loss scaling; BF16 has
 FP32's dynamic range and does not. Evaluation always runs in FP32.
 
 Phase 1 additions:
-  - Batches are `(x, y, rec_idx)`; `rec_idx` is ignored here but is what
-    recording-level aggregation will use once metrics move to the recording
-    level. Unpacked as `_` so this loop stays valid either way.
-  - `set_epoch()` is called on the training dataset each epoch, so a capped
-    training set draws a fresh subset of segments per epoch instead of reusing
-    the same one.
-  - Normalization is selectable from the config (`loader.normalize`), for the
-    z-score vs fixed-microvolt A/B.
+  - **Fixed patient splits.** With `data.splits_csv` set, training uses the
+    pools from `scripts/make_splits.py`: train on E (or E minus one fold), and
+    score on T. Every tuned decision is then scored on patients that are never
+    reported on. Without it, the legacy subject-disjoint 80/20 split is used so
+    the Phase 0 baseline stays runnable.
+  - **Recording-level metrics.** Segment scores are aggregated into one score
+    per recording and evaluated with the sensitivity-first metric set (partial
+    AUC, sensitivity at a specificity floor, specificity at a sensitivity
+    floor). A clinical decision is per recording, not per 10-second window.
+  - **Saved predictions.** The best epoch's per-segment scores are written to
+    `predictions_tune.npz` (and `predictions_test.npz` for a fold run), so
+    aggregator sweeps, calibration and threshold selection can be done
+    afterward with no retraining.
+  - **Checkpoint selection** by `train.select_metric`: recording-level partial
+    AUC (default when splits are used) or segment-level AUC (Phase 0
+    behaviour).
+  - Batches are `(x, y, rec_idx)`; `set_epoch()` redraws the capped training
+    subset each epoch; normalization is selectable for the A/B.
 
 @par Usage:
 @verbatim
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml
+python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml --fold 3
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml \
     --train-data-dir /tmp/$USER/$SLURM_JOB_ID/train --output-dir runs/bench --num-epochs 1
 @endverbatim
@@ -46,14 +56,15 @@ python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml \
 @par Config schema:
 @verbatim
 data:
-  train_manifest: <path>
+  train_manifest: <path>      # legacy split path; also used for the final eval
   train_data_dir: <path>
+  splits_csv: <path>          # Phase 1: enables the T/E pools
   eval_manifest:  <path>      # required only if eval.run_final_eval = true
   eval_data_dir:  <path>      # required only if eval.run_final_eval = true
 loader:
   batch_size: int
-  val_frac: float
-  max_epochs_per_recording: int | null   # TRAINING segment cap; val always uses all
+  val_frac: float             # legacy path only
+  max_epochs_per_recording: int | null   # TRAINING segment cap; eval uses all
   num_workers: int
   seed: int
   normalize: "zscore" | "uv_scale" | "none"   # optional; default zscore
@@ -70,6 +81,9 @@ train:
   device: "auto" | "cpu" | "cuda" | "cuda:N"
   output_dir: str             # checkpoints + log written here
   log_every: int              # optional; steps between throughput logs (default 200)
+  fold: int | null            # optional; CV fold index (needs splits_csv)
+  select_metric: str          # optional; "recording_pauc" | "segment_auc"
+  aggregator: str             # optional; segment->recording method, default mean
 eval:
   run_final_eval: bool        # if true, evaluates best checkpoint on eval split
 @endverbatim
@@ -84,7 +98,7 @@ import random
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import torch
@@ -98,7 +112,16 @@ from eeg_cnn_lstm.utils.dataset import (
     load_manifest,
     make_train_val_dataloaders,
 )
-from eeg_cnn_lstm.utils.metrics import compute_metrics, format_metrics
+from eeg_cnn_lstm.utils.metrics import (
+    DEFAULT_MAX_FPR,
+    aggregate_to_recordings,
+    compute_metrics,
+    format_metrics,
+    format_recording_metrics,
+    recording_metrics,
+    sigmoid,
+)
+from eeg_cnn_lstm.utils.splits import make_split_loaders
 from eeg_cnn_lstm.models.model import CNN_LSTM, ModelConfig
 
 ## @brief Supported autocast dtypes, selected by `train.amp_dtype`.
@@ -106,6 +129,9 @@ AMP_DTYPES: dict[str, torch.dtype] = {
     "fp16": torch.float16,
     "bf16": torch.bfloat16,
 }
+
+## @brief Key of the recording-level partial AUC in a `recording_metrics` dict.
+PAUC_KEY = f"pauc_fpr{DEFAULT_MAX_FPR:g}"
 
 # --------------
 # Set up helpers
@@ -163,11 +189,9 @@ def build_eval_loader(
     @brief Build a DataLoader over an entire manifest with no internal split.
 
     @details
-    Used for the final eval pass on the held-out test set. Unlike
-    `make_train_val_dataloaders`, this does not split by subject; it returns one
-    loader covering every recording, using every segment of each recording.
-    Normalization must match the training configuration, so the same options
-    are threaded through.
+    Used for the final eval pass on the held-out test set: one loader covering
+    every recording, using every segment of each recording. Normalization must
+    match training, so the same options are threaded through.
 
     @param manifest_path Path to the eval manifest CSV.
     @param data_dir Directory containing the eval `.npy` files.
@@ -229,8 +253,8 @@ def train_one_epoch(
     `scale`/`unscale_`/`step`/`update` are pass-throughs, so the same code path
     clips true-scale gradients either way.
 
-    Batches are `(x, y, rec_idx)`; the recording index is unused during training
-    and discarded here.
+    Batches are `(x, y, rec_idx)`; the recording index is unused during
+    training and discarded here.
 
     Timing: for each step, *data wait* is the time the loop is blocked waiting
     for the DataLoader to yield the next batch; *compute* is everything from
@@ -329,37 +353,37 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def evaluate(
+def collect_predictions(
     model: nn.Module,
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-) -> tuple[float, dict[str, float | int]]:
+) -> tuple[float, dict[str, np.ndarray]]:
     """
-    @brief Run a full evaluation pass (FP32) and compute segment-level metrics.
+    @brief Run a full FP32 evaluation pass and return every per-segment score.
 
     @details
-    Accumulates logits and labels across all batches, then calls
-    `compute_metrics` once on the full set. Avoids per-batch metric noise.
-    No autocast is used here: evaluation is cheap relative to training and
-    FP32 keeps the logits (and therefore the metrics) precision-independent.
+    No autocast: evaluation is cheap relative to training, and FP32 keeps the
+    logits (and therefore the metrics) precision-independent. Returning the raw
+    arrays rather than only summary metrics is what allows aggregation,
+    calibration and thresholds to be re-derived later without re-running the
+    model.
 
-    Recording indices are discarded for now; recording-level aggregation is
-    added with the Phase 1 metrics module.
-
-    @param model The model in eval mode.
-    @param loader Eval / val DataLoader.
-    @param criterion Same loss as training, for tracking val_loss.
+    @param model The model (set to eval mode internally).
+    @param loader Loader yielding `(x, y, rec_idx)`.
+    @param criterion Same loss as training, for tracking the eval loss.
     @param device Target device for tensors.
-    @return Tuple `(avg_loss, metrics_dict)`.
+    @return Tuple `(avg_loss, arrays)` where `arrays` holds `logits` (float32),
+            `labels` (int8) and `rec_idx` (int32), one entry per segment.
     """
     model.eval()
     total_loss = 0.0
     total_samples = 0
-    all_logits: list[torch.Tensor] = []
-    all_labels: list[torch.Tensor] = []
+    logits_l: list[torch.Tensor] = []
+    labels_l: list[torch.Tensor] = []
+    recs_l: list[torch.Tensor] = []
 
-    for x, y, _ in loader:
+    for x, y, rec in loader:
         x = x.to(device, non_blocking=True)
         y = y.to(device, non_blocking=True)
         logits = model(x)
@@ -368,16 +392,105 @@ def evaluate(
         bs = y.size(0)
         total_loss += loss.item() * bs
         total_samples += bs
-        all_logits.append(logits.detach().cpu())
-        all_labels.append(y.detach().cpu())
+        logits_l.append(logits.detach().float().cpu())
+        labels_l.append(y.detach().cpu())
+        recs_l.append(rec.detach().cpu())
 
     if total_samples == 0:
-        return 0.0, {}
+        empty = np.empty(0)
+        return 0.0, {"logits": empty, "labels": empty, "rec_idx": empty}
 
-    logits_tensor = torch.cat(all_logits)
-    labels_tensor = torch.cat(all_labels)
-    metrics = compute_metrics(logits_tensor, labels_tensor)
-    return total_loss / total_samples, metrics
+    arrays = {
+        "logits": torch.cat(logits_l).numpy().astype(np.float32),
+        "labels": torch.cat(labels_l).numpy().astype(np.int8),
+        "rec_idx": torch.cat(recs_l).numpy().astype(np.int32),
+    }
+    return total_loss / total_samples, arrays
+
+
+def evaluate(
+    model: nn.Module,
+    loader: DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+) -> tuple[float, dict[str, float | int]]:
+    """
+    @brief Segment-level evaluation pass (Phase 0 signature, kept for callers).
+
+    @param model The model in eval mode.
+    @param loader Eval / val DataLoader.
+    @param criterion Same loss as training, for tracking the eval loss.
+    @param device Target device for tensors.
+    @return Tuple `(avg_loss, segment_metrics)`.
+    """
+    loss, arrays = collect_predictions(model, loader, criterion, device)
+    if len(arrays["logits"]) == 0:
+        return 0.0, {}
+    metrics = compute_metrics(
+        torch.from_numpy(arrays["logits"]),
+        torch.from_numpy(arrays["labels"].astype(np.float32)),
+    )
+    return loss, metrics
+
+
+def summarize_predictions(
+    arrays: dict[str, np.ndarray],
+    dataset: TUABEpochDataset,
+    aggregator: str = "mean",
+) -> tuple[dict[str, float | int], dict[str, float | int]]:
+    """
+    @brief Compute segment-level and recording-level metrics from saved scores.
+
+    @param arrays Output of `collect_predictions`.
+    @param dataset The dataset the scores came from; supplies the recording
+           table (labels per recording).
+    @param aggregator Segment-to-recording method (see `metrics.AGGREGATORS`).
+    @return Tuple `(segment_metrics, recording_metrics)`.
+    """
+    if len(arrays["logits"]) == 0:
+        return {}, {}
+    seg = compute_metrics(
+        torch.from_numpy(arrays["logits"]),
+        torch.from_numpy(arrays["labels"].astype(np.float32)),
+    )
+    probs = sigmoid(arrays["logits"].astype(np.float64))
+    rec_labels = dataset.recordings["label"].to_numpy()
+    scores = aggregate_to_recordings(
+        probs, arrays["rec_idx"], aggregator, n_recordings=len(rec_labels)
+    )
+    rec = recording_metrics(rec_labels, scores)
+    rec["aggregator"] = aggregator  # type: ignore[assignment]
+    return seg, rec
+
+
+def save_predictions(
+    path: Path,
+    arrays: dict[str, np.ndarray],
+    dataset: TUABEpochDataset,
+) -> None:
+    """
+    @brief Write per-segment scores plus the recording table to a `.npz`.
+
+    @details
+    Everything needed for post-hoc work is stored: segment logits, the
+    recording each belongs to, and per-recording filenames, patient IDs and
+    labels (patient IDs make the clustered bootstrap possible).
+
+    @param path Destination `.npz` path.
+    @param arrays Output of `collect_predictions`.
+    @param dataset The dataset the scores came from.
+    """
+    recs = dataset.recordings
+    np.savez_compressed(
+        path,
+        logits=arrays["logits"],
+        labels=arrays["labels"],
+        rec_idx=arrays["rec_idx"],
+        rec_filename=recs["filename"].to_numpy().astype("U64"),
+        rec_subject_id=recs["subject_id"].to_numpy().astype("U16"),
+        rec_label=recs["label"].to_numpy().astype(np.int8),
+        rec_n_epochs=recs["n_epochs"].to_numpy().astype(np.int32),
+    )
 
 
 # ------------
@@ -391,7 +504,8 @@ def train(
     output_dir: str | None = None,
     num_epochs: int | None = None,
     max_steps: int = 0,
-) -> None:
+    fold: Optional[int] = None,
+) -> dict[str, Any]:
     """
     @brief Run the full training routine driven by a YAML config.
 
@@ -401,6 +515,9 @@ def train(
     @param output_dir Optional override for `train.output_dir`.
     @param num_epochs Optional override for `train.num_epochs`.
     @param max_steps Optional cap on training steps per epoch (0 = no cap).
+    @param fold Optional CV fold index; requires `data.splits_csv`.
+    @return Dict with the best score, the best epoch's metrics and output
+            paths, so an HPO driver can consume the result directly.
     """
     config = load_config(config_path)
 
@@ -419,6 +536,8 @@ def train(
         train_cfg["num_epochs"] = overrides["num_epochs"] = num_epochs
     if max_steps:
         overrides["max_steps"] = max_steps
+    if fold is not None:
+        train_cfg["fold"] = overrides["fold"] = fold
 
     set_seeds(int(loader_cfg.get("seed", 42)))
     device = select_device(str(train_cfg.get("device", "auto")))
@@ -439,26 +558,69 @@ def train(
 
     # ---- Dataloaders ----
     num_workers = int(loader_cfg.get("num_workers", 0))
+    batch_size = int(loader_cfg["batch_size"])
+    seed = int(loader_cfg.get("seed", 42))
     normalize = str(loader_cfg.get("normalize", "zscore"))
     norm_stats = loader_cfg.get("norm_stats")
     clip_uv = loader_cfg.get("clip_uv")
     resample_each_epoch = bool(loader_cfg.get("resample_each_epoch", False))
-    train_loader, val_loader, info = make_train_val_dataloaders(
-        manifest_path=data_cfg["train_manifest"],
-        data_dir=data_cfg["train_data_dir"],
-        batch_size=int(loader_cfg["batch_size"]),
-        val_frac=float(loader_cfg["val_frac"]),
-        max_epochs_per_recording=loader_cfg.get("max_epochs_per_recording"),
-        num_workers=num_workers,
-        seed=int(loader_cfg.get("seed", 42)),
-        normalize=normalize,
-        norm_stats=norm_stats,
-        clip_uv=clip_uv,
-        resample_each_epoch=resample_each_epoch,
-    )
-    logger.info(f"Split info: {info}")
-    logger.info(f"Train dataset: {train_loader.dataset.describe()}")
-    logger.info(f"Val dataset:   {val_loader.dataset.describe()}")
+    segment_cap = loader_cfg.get("max_epochs_per_recording")
+    splits_csv = data_cfg.get("splits_csv")
+    fold_idx = train_cfg.get("fold")
+    aggregator = str(train_cfg.get("aggregator", "mean"))
+
+    test_loader: Optional[DataLoader] = None
+    if splits_csv:
+        # Phase 1 path: train on E (minus a fold), score on T.
+        sl = make_split_loaders(
+            data_dir=data_cfg["train_data_dir"],
+            splits=splits_csv,
+            fold=fold_idx,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            seed=seed,
+            segments_per_recording=segment_cap,
+            resample_each_epoch=resample_each_epoch,
+            normalize=normalize,
+            norm_stats=norm_stats,
+            clip_uv=clip_uv,
+        )
+        train_loader, val_loader, test_loader = sl.train, sl.tune, sl.test
+        info = sl.info
+        val_name = "T"
+        default_select = "recording_pauc"
+    else:
+        # Legacy Phase 0 path: subject-disjoint 80/20 of the training manifest.
+        train_loader, val_loader, info = make_train_val_dataloaders(
+            manifest_path=data_cfg["train_manifest"],
+            data_dir=data_cfg["train_data_dir"],
+            batch_size=batch_size,
+            val_frac=float(loader_cfg["val_frac"]),
+            max_epochs_per_recording=segment_cap,
+            num_workers=num_workers,
+            seed=seed,
+            normalize=normalize,
+            norm_stats=norm_stats,
+            clip_uv=clip_uv,
+            resample_each_epoch=resample_each_epoch,
+        )
+        val_name = "val"
+        default_select = "segment_auc"
+
+    select_metric = str(train_cfg.get("select_metric", default_select))
+    if select_metric not in {"recording_pauc", "segment_auc"}:
+        raise ValueError(
+            "train.select_metric must be 'recording_pauc' or 'segment_auc'; "
+            f"got {select_metric!r}"
+        )
+    if select_metric == "recording_pauc" and not splits_csv:
+        logger.warning(
+            "select_metric=recording_pauc without data.splits_csv: selecting on "
+            "the legacy validation split."
+        )
+
+    logger.info(f"Split info: {json.dumps(info, default=str)}")
+    logger.info(f"Selection metric: {select_metric}; aggregator: {aggregator}")
 
     # ---- Model ----
     model = CNN_LSTM(ModelConfig()).to(device)
@@ -496,19 +658,24 @@ def train(
             "slower training with this architecture."
         )
 
-    # ---- Benchmark record ----
+    # ---- Run record ----
     bench: dict[str, Any] = {
         "config": config_path,
         "overrides": overrides,
         "train_data_dir": data_cfg["train_data_dir"],
+        "splits_csv": splits_csv,
+        "fold": fold_idx,
         "device": str(device),
         "amp_dtype": precision,
         "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
-        "batch_size": int(loader_cfg["batch_size"]),
+        "batch_size": batch_size,
         "num_workers": num_workers,
         "normalize": normalize,
         "clip_uv": clip_uv,
         "resample_each_epoch": resample_each_epoch,
+        "segments_per_recording": segment_cap,
+        "select_metric": select_metric,
+        "aggregator": aggregator,
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "stage_seconds": float(os.environ["STAGE_SECONDS"]) if os.environ.get("STAGE_SECONDS") else None,
@@ -520,7 +687,11 @@ def train(
     # ---- Training loop ----
     n_epochs = int(train_cfg.get("num_epochs", 2))
     best_score = -float("inf")
+    best_epoch = -1
+    best_seg: dict[str, float | int] = {}
+    best_rec: dict[str, float | int] = {}
     best_ckpt_path = output_dir_p / "best.pt"
+    pred_path = output_dir_p / "predictions_tune.npz"
 
     for epoch in range(1, n_epochs + 1):
         # Redraw the per-recording segment subset (no-op unless the training set
@@ -541,21 +712,26 @@ def train(
             max_steps=max_steps,
             log_every=log_every,
         )
+
         t_val = time.perf_counter()
-        val_loss, val_metrics = evaluate(model, val_loader, criterion, device)
+        val_loss, arrays = collect_predictions(model, val_loader, criterion, device)
+        seg_metrics, rec_metrics = summarize_predictions(
+            arrays, val_loader.dataset, aggregator
+        )
         val_s = time.perf_counter() - t_val
 
         logger.info(
             f"Epoch {epoch}/{n_epochs}  "
-            f"train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  "
-            f"{format_metrics(val_metrics, prefix='val')}"
+            f"train_loss={train_loss:.4f}  {val_name}_loss={val_loss:.4f}  "
+            f"{format_metrics(seg_metrics, prefix=f'{val_name}seg')}"
         )
+        logger.info(f"  {format_recording_metrics(rec_metrics, prefix=f'{val_name}rec')}")
         logger.info(
             f"  timing: train {t_stats['epoch_seconds'] / 60:.1f} min "
             f"({t_stats['samples_per_sec']:,.0f} samples/s, "
             f"data_wait {t_stats['data_wait_frac']:.1%}, "
             f"first batch {t_stats['first_batch_seconds']:.1f}s)  "
-            f"val {val_s / 60:.1f} min"
+            f"eval {val_s / 60:.1f} min"
         )
 
         bench["epochs"].append(
@@ -563,44 +739,103 @@ def train(
                 "epoch": epoch,
                 "train_loss": train_loss,
                 "val_loss": val_loss,
-                "val_metrics": val_metrics,
+                "segment_metrics": seg_metrics,
+                "recording_metrics": rec_metrics,
                 "train_timing": t_stats,
                 "val_seconds": round(val_s, 2),
             }
         )
-        bench_path.write_text(json.dumps(bench, indent=2))
+        bench_path.write_text(json.dumps(bench, indent=2, default=str))
 
-        # Track best by AUC; fall back to accuracy when AUC is NaN.
-        score = val_metrics.get("auc_roc", float("nan"))
-        if score != score:  # NaN check
-            score = val_metrics.get("accuracy", -float("inf"))
+        # ---- Checkpoint selection ----
+        if select_metric == "recording_pauc":
+            score = float(rec_metrics.get(PAUC_KEY, float("nan")))
+        else:
+            score = float(seg_metrics.get("auc_roc", float("nan")))
+        if score != score:  # NaN: fall back to segment accuracy
+            score = float(seg_metrics.get("accuracy", -float("inf")))
+
         if score > best_score:
-            best_score = score
+            best_score, best_epoch = score, epoch
+            best_seg, best_rec = seg_metrics, rec_metrics
             torch.save(model.state_dict(), best_ckpt_path)
+            save_predictions(pred_path, arrays, val_loader.dataset)
             logger.info(
-                f"  ↑ new best (score={score:.4f}); saved {best_ckpt_path.name}"
+                f"  ↑ new best ({select_metric}={score:.4f}); saved "
+                f"{best_ckpt_path.name} and {pred_path.name}"
             )
 
-    logger.info(f"Training complete. Best val score: {best_score:.4f}")
-    logger.info(f"Benchmark written to {bench_path}")
+    logger.info(
+        f"Training complete. Best {select_metric}={best_score:.4f} at epoch {best_epoch}."
+    )
 
-    # ---- Final eval (optional) ----
+    bench["best"] = {
+        "epoch": best_epoch,
+        "select_metric": select_metric,
+        "score": best_score,
+        "segment_metrics": best_seg,
+        "recording_metrics": best_rec,
+        "checkpoint": str(best_ckpt_path),
+        "predictions": str(pred_path),
+    }
+
+    # ---- Held-out fold (CV runs only) ----
+    if test_loader is not None:
+        logger.info(f"Scoring held-out fold {fold_idx} with the best checkpoint...")
+        model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
+        test_loss, test_arrays = collect_predictions(
+            model, test_loader, criterion, device
+        )
+        test_seg, test_rec = summarize_predictions(
+            test_arrays, test_loader.dataset, aggregator
+        )
+        test_pred_path = output_dir_p / "predictions_test.npz"
+        save_predictions(test_pred_path, test_arrays, test_loader.dataset)
+        logger.info(f"  fold {fold_idx} loss={test_loss:.4f}")
+        logger.info(f"  {format_recording_metrics(test_rec, prefix='testrec')}")
+        bench["test"] = {
+            "fold": fold_idx,
+            "loss": test_loss,
+            "segment_metrics": test_seg,
+            "recording_metrics": test_rec,
+            "predictions": str(test_pred_path),
+        }
+
+    # ---- Final eval on the held-out TUAB partition (opt-in only) ----
     if eval_cfg.get("run_final_eval", False):
-        logger.info("Running final eval on held-out test set...")
+        logger.info("Running final eval on the held-out TUAB eval partition...")
         eval_loader = build_eval_loader(
             manifest_path=data_cfg["eval_manifest"],
             data_dir=data_cfg["eval_data_dir"],
-            batch_size=int(loader_cfg["batch_size"]),
+            batch_size=batch_size,
             num_workers=num_workers,
-            seed=int(loader_cfg.get("seed", 42)),
+            seed=seed,
             normalize=normalize,
             norm_stats=norm_stats,
             clip_uv=clip_uv,
         )
         model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
-        test_loss, test_metrics = evaluate(model, eval_loader, criterion, device)
-        logger.info(f"Test loss: {test_loss:.4f}")
-        logger.info(format_metrics(test_metrics, prefix="test"))
+        final_loss, final_arrays = collect_predictions(
+            model, eval_loader, criterion, device
+        )
+        final_seg, final_rec = summarize_predictions(
+            final_arrays, eval_loader.dataset, aggregator
+        )
+        final_pred_path = output_dir_p / "predictions_eval.npz"
+        save_predictions(final_pred_path, final_arrays, eval_loader.dataset)
+        logger.info(f"Eval loss: {final_loss:.4f}")
+        logger.info(format_metrics(final_seg, prefix="evalseg"))
+        logger.info(format_recording_metrics(final_rec, prefix="evalrec"))
+        bench["final_eval"] = {
+            "loss": final_loss,
+            "segment_metrics": final_seg,
+            "recording_metrics": final_rec,
+            "predictions": str(final_pred_path),
+        }
+
+    bench_path.write_text(json.dumps(bench, indent=2, default=str))
+    logger.info(f"Run record written to {bench_path}")
+    return bench
 
 
 def parse_args() -> argparse.Namespace:
@@ -633,6 +868,12 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Cap training steps per epoch (0 = full epoch); for quick smoke tests",
     )
+    parser.add_argument(
+        "--fold",
+        type=int,
+        default=None,
+        help="CV fold index to hold out (requires data.splits_csv)",
+    )
     return parser.parse_args()
 
 
@@ -645,6 +886,7 @@ def main() -> None:
         output_dir=args.output_dir,
         num_epochs=args.num_epochs,
         max_steps=args.max_steps,
+        fold=args.fold,
     )
 
 
