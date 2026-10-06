@@ -109,7 +109,7 @@ def build(
                 "restore_best": True,
             },
             "lr_schedule": {
-                "enabled": True,
+                "enabled": False,
                 "kind": "plateau",
                 "factor": factor,
                 "patience": lr_patience,
@@ -148,7 +148,7 @@ def parse_args() -> argparse.Namespace:
                    help="Epochs of no improvement before stopping")
     p.add_argument("--lr-patience-epochs", type=float, default=1.0,
                    help="Epochs of no improvement before halving the LR")
-    p.add_argument("--min-delta", type=float, default=0.002,
+    p.add_argument("--min-delta", type=float, default=0.01,
                    help="Absolute improvement that counts as progress")
     p.add_argument("--factor", type=float, default=0.5,
                    help="LR multiplier on plateau")
