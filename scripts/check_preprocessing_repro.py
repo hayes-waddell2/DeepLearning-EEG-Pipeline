@@ -19,7 +19,7 @@ dataset can be regenerated from the raw EDFs with version-controlled code.
 @par Usage (from repo root; normally via jobs/check_repro.sh):
 @verbatim
 python -m scripts.check_preprocessing_repro --n-files 4
-python -m scripts.check_preprocessing_repro --module src.preprocessing.preprocessing
+python -m scripts.check_preprocessing_repro --module eeg_cnn_lstm.preprocessing.preprocessing
 @endverbatim
 """
 
@@ -39,10 +39,7 @@ RAW_TRAIN = Path("/shared/rc/eeg-cnn-lstm/data/raw-datasets/tuab/v3.0.1/edf/trai
 CONVERTED = Path("/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train")
 
 ## @brief Where preprocessing.py may live; the first importable one is used.
-CANDIDATE_MODULES = [
-    "src.eeg_cnn_lstm.preprocessing.preprocessing",
-    "src.preprocessing.preprocessing",
-]
+CANDIDATE_MODULES = ["eeg_cnn_lstm.preprocessing.preprocessing"]
 
 
 def import_preprocessing(name: str | None):

@@ -39,9 +39,9 @@ import torch
 import yaml
 from torch.utils.data import DataLoader
 
-from src.eeg_cnn_lstm.models.model_b import CNN_LSTM, ModelConfig
-from src.utils.dataset import TUABEpochDataset, build_subject_disjoint_split, load_manifest
-from src.utils.metrics import compute_metrics
+from eeg_cnn_lstm.models.model import CNN_LSTM, ModelConfig
+from eeg_cnn_lstm.utils.dataset import TUABEpochDataset, build_subject_disjoint_split, load_manifest
+from eeg_cnn_lstm.utils.metrics import compute_metrics
 
 EXPECTED_BASELINE_AUC = 0.8851
 AUC_TOLERANCE = 0.002
@@ -69,7 +69,7 @@ def collect_logits(
     )
     model.eval()
     logits, labels = [], []
-    for x, y in loader:
+    for x, y, _ in loader:
         logits.append(model(x.to(device, non_blocking=True)).float().cpu())
         labels.append(y)
     return torch.cat(logits), torch.cat(labels)

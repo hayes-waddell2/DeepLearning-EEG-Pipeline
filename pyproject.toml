@@ -38,6 +38,8 @@ where = ["src"]
 
 [tool.setuptools_scm]
 version_file = "src/eeg_cnn_lstm/_version.py"
+fallback_version = "0.0.0"
+git_describe_command = "git describe --dirty --tags --long --match v*"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
