@@ -1,0 +1,67 @@
+{
+  "train_manifest": "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/train/train_manifest.csv",
+  "eval_manifest": "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab/eval/eval_manifest.csv",
+  "train": {
+    "n_recordings": 2717,
+    "n_patients": 2076,
+    "n_segments": 743578,
+    "duplicate_filenames": 0,
+    "sfreq_values": [
+      250.0
+    ],
+    "recording_label_counts": {
+      "0": 1371,
+      "1": 1346
+    },
+    "patient_label_counts_mode": {
+      "0": 1221,
+      "1": 855
+    },
+    "recordings_per_patient": {
+      "1": 1651,
+      "2": 294,
+      "3": 83,
+      "4": 31,
+      "5": 8,
+      "6": 4,
+      "7": 1,
+      "8": 2,
+      "9": 2
+    },
+    "max_recordings_per_patient": 9,
+    "patients_with_multiple_recordings": 425,
+    "patients_with_mixed_labels": 54,
+    "recordings_from_mixed_label_patients": 149,
+    "malformed_subject_ids": []
+  },
+  "eval": {
+    "n_recordings": 276,
+    "n_patients": 253,
+    "n_segments": 73734,
+    "duplicate_filenames": 0,
+    "sfreq_values": [
+      250.0
+    ],
+    "recording_label_counts": {
+      "0": 150,
+      "1": 126
+    },
+    "patient_label_counts_mode": {
+      "0": 148,
+      "1": 105
+    },
+    "recordings_per_patient": {
+      "1": 235,
+      "2": 14,
+      "3": 3,
+      "4": 1
+    },
+    "max_recordings_per_patient": 4,
+    "patients_with_multiple_recordings": 18,
+    "patients_with_mixed_labels": 0,
+    "recordings_from_mixed_label_patients": 0,
+    "malformed_subject_ids": []
+  },
+  "overlap_patients": [],
+  "n_overlap_patients": 0
+}
