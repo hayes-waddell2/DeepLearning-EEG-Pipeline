@@ -117,7 +117,7 @@ class EarlyStopping:
     """
 
     patience: int = 12
-    min_delta: float = 0.002
+    min_delta: float = 0.01
     mode: str = "max"
     min_checks: int = 0
 
