@@ -159,23 +159,24 @@ def fake_train_factory(
         cfg = config_overrides or {}
         model = cfg.get("model", {})
         train_c = cfg.get("train", {})
-        loader_c = cfg.get("loader", {})
 
         if behavior == "fail":
             raise RuntimeError("simulated trial failure")
 
         # A toy objective with an interior optimum, so the search has
         # something real to find: moderate dropout and decay are best.
-        dropout = float(model.get("dropout", 0.2))
+        dropout = float(model.get("conv_dropout", 0.3))
+        head_do = float(model.get("head_dropout", 0.3))
         wd = float(train_c.get("weight_decay", 1e-4))
         hidden = float(model.get("lstm_hidden", 128))
-        segs = float(loader_c.get("max_epochs_per_recording", 30))
+        head_h = float(model.get("head_hidden", 64))
         peak = (
             0.80
-            - 2.2 * (dropout - 0.30) ** 2
-            - 0.02 * (math.log10(wd) + 3.0) ** 2
-            - 0.00002 * abs(hidden - 128)
-            - 0.00004 * abs(segs - 30)
+            - 1.6 * (dropout - 0.32) ** 2
+            - 1.1 * (head_do - 0.28) ** 2
+            - 0.015 * (math.log10(wd) + 3.0) ** 2
+            - 0.00008 * abs(hidden - 96)
+            - 0.00020 * abs(head_h - 64)
         )
         if behavior == "nan":
             peak = float("nan")
@@ -283,12 +284,26 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
     checks.check("startup points are inside the search space", startup_points_valid)
 
     def overrides_nest_correctly() -> None:
-        ov = params_to_overrides(
-            {p.name: (p.choices[0] if p.kind == "categorical" else p.low) for p in SEARCH_SPACE}
-        )
-        assert "train" in ov and "model" in ov and "loader" in ov, ov
+        """Sampled values must land at real config paths, transforms applied."""
+        lowest = {
+            p.name: (p.choices[0] if p.kind == "categorical" else p.low) for p in SEARCH_SPACE
+        }
+        ov = params_to_overrides(lowest)
+        assert set(ov) == {"train", "model"}, f"unexpected sections: {sorted(ov)}"
         assert ov["train"]["lr"] == 3e-4, ov["train"]
-        assert ov["loader"]["max_epochs_per_recording"] == 10, ov["loader"]
+        assert ov["train"]["pos_weight"] == 1.0, ov["train"]
+        # transforms must have run: a multiplier became a channel tuple, and
+        # a "4,2,2" string became a pool tuple.
+        assert ov["model"]["conv_channels"] == (16, 32, 64), ov["model"]
+        assert ov["model"]["pool_sizes"] == (4, 2, 2), ov["model"]
+        assert isinstance(ov["model"]["lstm_bidirectional"], bool)
+        # every model.* key must be a real field, not a search-space alias
+        import dataclasses as _dc
+        from eeg_cnn_lstm.models.model import ModelConfig as _MC
+
+        fields = {f.name for f in _dc.fields(_MC)}
+        stray = sorted(set(ov["model"]) - fields)
+        assert not stray, f"transformed overrides still contain aliases: {stray}"
         nested: dict[str, Any] = {}
         set_by_path(nested, "a.b.c", 1)
         assert nested == {"a": {"b": {"c": 1}}}
