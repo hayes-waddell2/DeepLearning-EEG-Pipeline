@@ -267,7 +267,9 @@ class TUABEpochDataset(Dataset):
         """
         super().__init__()
         if normalize not in NORMALIZE_MODES:
-            raise ValueError(f"normalize must be one of {NORMALIZE_MODES}; got {normalize!r}")
+            raise ValueError(
+                f"normalize must be one of {NORMALIZE_MODES}; got {normalize!r}"
+            )
 
         self._data_dir = Path(data_dir)
         self._normalize = normalize
@@ -290,10 +292,14 @@ class TUABEpochDataset(Dataset):
                 self._clip_uv = float(stats["clip_uv"])
 
         # Recording table: row position is the rec_idx returned by __getitem__.
-        cols = [c for c in ("filename", "subject_id", "label", "n_epochs") if c in manifest]
+        cols = [
+            c for c in ("filename", "subject_id", "label", "n_epochs") if c in manifest
+        ]
         self.recordings: pd.DataFrame = manifest[cols].reset_index(drop=True).copy()
         if "subject_id" not in self.recordings:
-            self.recordings["subject_id"] = self.recordings["filename"].map(parse_subject_id)
+            self.recordings["subject_id"] = self.recordings["filename"].map(
+                parse_subject_id
+            )
 
         self._paths: list[str] = [
             str(self._data_dir / f) for f in self.recordings["filename"]
@@ -327,9 +333,11 @@ class TUABEpochDataset(Dataset):
             rec = np.repeat(
                 np.arange(len(self._n_epochs), dtype=np.int32), self._n_epochs
             )
-            seg = np.concatenate(
-                [np.arange(n, dtype=np.int32) for n in self._n_epochs]
-            ) if len(self._n_epochs) else np.empty(0, dtype=np.int32)
+            seg = (
+                np.concatenate([np.arange(n, dtype=np.int32) for n in self._n_epochs])
+                if len(self._n_epochs)
+                else np.empty(0, dtype=np.int32)
+            )
         else:
             rng = np.random.default_rng((self._seed, self._epoch))
             recs, segs = [], []

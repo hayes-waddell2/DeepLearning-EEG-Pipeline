@@ -306,6 +306,6 @@ def test_pipeline_saves_valid_npy(tmp_path):
         "segments are stored as float16 microvolts)."
     )
     # uV scale check: volts (~1e-5) would round to ~0 in float16
-    assert np.nanmax(np.abs(saved.astype(np.float32))) > 1.0, (
-         "Values look like volts, not microvolts."
-    )
+    assert (
+        np.nanmax(np.abs(saved.astype(np.float32))) > 1.0
+    ), "Values look like volts, not microvolts."

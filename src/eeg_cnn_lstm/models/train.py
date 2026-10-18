@@ -895,7 +895,9 @@ def train(
         "fold": fold_idx,
         "device": str(device),
         "amp_dtype": precision,
-        "gpu_name": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "gpu_name": (
+            torch.cuda.get_device_name(device) if device.type == "cuda" else None
+        ),
         "batch_size": batch_size,
         "num_workers": num_workers,
         "normalize": normalize,
@@ -908,15 +910,19 @@ def train(
         "model": dict(config.get("model") or {}),
         "n_parameters": n_params,
         "pos_weight": float(pos_weight_val) if pos_weight_val is not None else None,
-        "early_stopping": {**es_cfg, "steps_per_epoch": steps_per_epoch,
-                           "eval_every_steps": eval_every},
+        "early_stopping": {
+            **es_cfg,
+            "steps_per_epoch": steps_per_epoch,
+            "eval_every_steps": eval_every,
+        },
         "lr_schedule": dict(train_cfg.get("lr_schedule") or {}),
         "lr_initial": current_lr(optimizer),
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "stage_seconds": (
             float(os.environ["STAGE_SECONDS"])
-            if os.environ.get("STAGE_SECONDS") else None
+            if os.environ.get("STAGE_SECONDS")
+            else None
         ),
         "split_info": info,
         "epochs": [],
@@ -1123,7 +1129,8 @@ def train(
             f"{format_metrics(last.get('segment_metrics', {}), prefix=f'{val_name}seg')}"
         )
         val_total_min = (
-            float(t_stats["mid_epoch_eval_seconds"]) + float(last.get("val_seconds") or 0.0)
+            float(t_stats["mid_epoch_eval_seconds"])
+            + float(last.get("val_seconds") or 0.0)
         ) / 60
         logger.info(
             f"  timing: train {t_stats['epoch_seconds'] / 60:.1f} min "

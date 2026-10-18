@@ -321,8 +321,11 @@ def partial_auc_high_sens(
     if len(np.unique(labels)) < 2:
         return float("nan")
     return float(
-        roc_auc_score(1 - labels.astype(int), -np.asarray(scores, dtype=float),
-                      max_fpr=1.0 - min_tpr)
+        roc_auc_score(
+            1 - labels.astype(int),
+            -np.asarray(scores, dtype=float),
+            max_fpr=1.0 - min_tpr,
+        )
     )
 
 
@@ -470,7 +473,9 @@ def recording_metrics(
     out[f"spec_at_sens{sens_floor:g}"] = spec
 
     if threshold is None:
-        threshold = thr_sens if np.isfinite(thr_sens) else youden_threshold(labels, scores)
+        threshold = (
+            thr_sens if np.isfinite(thr_sens) else youden_threshold(labels, scores)
+        )
     out.update(metrics_at_threshold(labels, scores, float(threshold)))
     return out
 
@@ -657,7 +662,9 @@ def _main() -> None:
     seg = compute_metrics(logits, torch.tensor(seg_labels, dtype=torch.float32))
     print("segment level:", format_metrics(seg, prefix="seg"))
 
-    print(f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} {'sens@spec.9':>12} {'spec@sens.95':>13}")
+    print(
+        f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} {'sens@spec.9':>12} {'spec@sens.95':>13}"
+    )
     for row in sweep_aggregators(probs, rec_idx, rec_labels):
         print(
             f"{row['aggregator']:>16} {row['auc_roc']:>7.4f} "

@@ -107,8 +107,11 @@ class Param:
             return trial.suggest_categorical(self.name, list(self.choices))
         if self.kind == "int":
             return trial.suggest_int(
-                self.name, int(self.low), int(self.high),
-                step=self.step or 1, log=self.log,
+                self.name,
+                int(self.low),
+                int(self.high),
+                step=self.step or 1,
+                log=self.log,
             )
         return trial.suggest_float(self.name, self.low, self.high, log=self.log)
 
@@ -117,47 +120,72 @@ class Param:
 SEARCH_SPACE: tuple[Param, ...] = (
     # ---- Regularization: the widest ranges, because this is the diagnosis ----
     Param(
-        "dropout", "model.dropout", "float", "regularization",
+        "dropout",
+        "model.dropout",
+        "float",
+        "regularization",
         "Overfitting starts at pass 1; the default was too weak to be the "
         "answer, so the range spans near-none to aggressive.",
-        low=0.05, high=0.6,
+        low=0.05,
+        high=0.6,
     ),
     Param(
-        "weight_decay", "train.weight_decay", "float", "regularization",
+        "weight_decay",
+        "train.weight_decay",
+        "float",
+        "regularization",
         "AdamW decouples decay from the adaptive step, so this is a true L2 "
         "penalty whose magnitude is meaningful. Four orders of magnitude.",
-        low=1e-5, high=1e-1, log=True,
+        low=1e-5,
+        high=1e-1,
+        log=True,
     ),
     Param(
-        "segments_per_recording", "loader.max_epochs_per_recording", "int",
+        "segments_per_recording",
+        "loader.max_epochs_per_recording",
+        "int",
         "regularization",
         "Controls how much each patient contributes. More segments is more "
         "data but more CORRELATED data, so this trades coverage against "
         "memorizing individual patients. Probably the most underrated knob.",
-        low=10, high=60, step=5,
+        low=10,
+        high=60,
+        step=5,
     ),
     # ---- Capacity: regularizer and deployment cost at once ----
     Param(
-        "lstm_hidden", "model.lstm_hidden", "categorical", "capacity",
+        "lstm_hidden",
+        "model.lstm_hidden",
+        "categorical",
+        "capacity",
         "Shrinking the recurrent state limits what can be memorized and "
         "directly cuts parameters. Coarse set: 96 vs 100 is not a question.",
         choices=[32, 64, 128, 192, 256],
     ),
     Param(
-        "lstm_layers", "model.lstm_layers", "categorical", "capacity",
+        "lstm_layers",
+        "model.lstm_layers",
+        "categorical",
+        "capacity",
         "A second recurrent layer roughly doubles recurrent parameters; worth "
         "asking whether it earns them.",
         choices=[1, 2],
     ),
     Param(
-        "conv_width_mult", "model.conv_width_mult", "categorical", "capacity",
+        "conv_width_mult",
+        "model.conv_width_mult",
+        "categorical",
+        "capacity",
         "Scales every conv block's channel count. Width is a smooth capacity "
         "dial, unlike depth, which changes the receptive field and is run as "
         "a separate ablation.",
         choices=[0.5, 0.75, 1.0, 1.5],
     ),
     Param(
-        "downsample_factor", "model.downsample_factor", "categorical", "capacity",
+        "downsample_factor",
+        "model.downsample_factor",
+        "categorical",
+        "capacity",
         "How much the convolutional stack reduces the sequence before the "
         "LSTM. More reduction is a shorter sequence, fewer parameters, and a "
         "coarser view of time.",
@@ -165,20 +193,30 @@ SEARCH_SPACE: tuple[Param, ...] = (
     ),
     # ---- Optimization: narrow, because the evidence says it is not the problem ----
     Param(
-        "lr", "train.lr", "float", "optimization",
+        "lr",
+        "train.lr",
+        "float",
+        "optimization",
         "1e-3 already works and mid-run reduction did not help, so this "
         "refines a known-good region rather than exploring. Note the evidence "
         "is against mid-run REDUCTION; a different initial rate is untested, "
         "which is why it stays in the search at all.",
-        low=3e-4, high=3e-3, log=True,
+        low=3e-4,
+        high=3e-3,
+        log=True,
     ),
     # ---- Sensitivity: asymmetric on purpose ----
     Param(
-        "pos_weight", "train.pos_weight", "float", "sensitivity",
+        "pos_weight",
+        "train.pos_weight",
+        "float",
+        "sensitivity",
         "Scales the loss on abnormal recordings. The range starts at 1.0 and "
         "goes up only: a triage tool should never be pushed toward missing "
         "positives, so weights below 1 are excluded by construction.",
-        low=1.0, high=4.0, log=True,
+        low=1.0,
+        high=4.0,
+        log=True,
     ),
 )
 
@@ -191,26 +229,66 @@ SEARCH_SPACE: tuple[Param, ...] = (
 #  point and one high-sensitivity point.
 STARTUP_TRIALS: tuple[dict[str, Any], ...] = (
     # The Step 2 baseline, so the search has the current model as a reference.
-    {"dropout": 0.2, "weight_decay": 1e-4, "segments_per_recording": 30,
-     "lstm_hidden": 128, "lstm_layers": 1, "conv_width_mult": 1.0,
-     "downsample_factor": 4, "lr": 1e-3, "pos_weight": 1.0},
+    {
+        "dropout": 0.2,
+        "weight_decay": 1e-4,
+        "segments_per_recording": 30,
+        "lstm_hidden": 128,
+        "lstm_layers": 1,
+        "conv_width_mult": 1.0,
+        "downsample_factor": 4,
+        "lr": 1e-3,
+        "pos_weight": 1.0,
+    },
     # Barely regularized: should overfit hard, anchoring the low end.
-    {"dropout": 0.05, "weight_decay": 1e-5, "segments_per_recording": 60,
-     "lstm_hidden": 256, "lstm_layers": 2, "conv_width_mult": 1.5,
-     "downsample_factor": 2, "lr": 1e-3, "pos_weight": 1.0},
+    {
+        "dropout": 0.05,
+        "weight_decay": 1e-5,
+        "segments_per_recording": 60,
+        "lstm_hidden": 256,
+        "lstm_layers": 2,
+        "conv_width_mult": 1.5,
+        "downsample_factor": 2,
+        "lr": 1e-3,
+        "pos_weight": 1.0,
+    },
     # Heavily regularized: the opposite anchor.
-    {"dropout": 0.55, "weight_decay": 5e-2, "segments_per_recording": 10,
-     "lstm_hidden": 64, "lstm_layers": 1, "conv_width_mult": 0.5,
-     "downsample_factor": 8, "lr": 1e-3, "pos_weight": 1.0},
+    {
+        "dropout": 0.55,
+        "weight_decay": 5e-2,
+        "segments_per_recording": 10,
+        "lstm_hidden": 64,
+        "lstm_layers": 1,
+        "conv_width_mult": 0.5,
+        "downsample_factor": 8,
+        "lr": 1e-3,
+        "pos_weight": 1.0,
+    },
     # Small capacity, light explicit regularization: separates the two routes
     # to the same effect, which the search would otherwise confound.
-    {"dropout": 0.1, "weight_decay": 1e-4, "segments_per_recording": 30,
-     "lstm_hidden": 32, "lstm_layers": 1, "conv_width_mult": 0.5,
-     "downsample_factor": 4, "lr": 1e-3, "pos_weight": 1.0},
+    {
+        "dropout": 0.1,
+        "weight_decay": 1e-4,
+        "segments_per_recording": 30,
+        "lstm_hidden": 32,
+        "lstm_layers": 1,
+        "conv_width_mult": 0.5,
+        "downsample_factor": 4,
+        "lr": 1e-3,
+        "pos_weight": 1.0,
+    },
     # Sensitivity-weighted, moderate regularization.
-    {"dropout": 0.3, "weight_decay": 1e-3, "segments_per_recording": 30,
-     "lstm_hidden": 128, "lstm_layers": 1, "conv_width_mult": 1.0,
-     "downsample_factor": 4, "lr": 1e-3, "pos_weight": 2.5},
+    {
+        "dropout": 0.3,
+        "weight_decay": 1e-3,
+        "segments_per_recording": 30,
+        "lstm_hidden": 128,
+        "lstm_layers": 1,
+        "conv_width_mult": 1.0,
+        "downsample_factor": 4,
+        "lr": 1e-3,
+        "pos_weight": 2.5,
+    },
 )
 
 

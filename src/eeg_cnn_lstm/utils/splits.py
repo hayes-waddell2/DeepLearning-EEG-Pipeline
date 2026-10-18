@@ -152,9 +152,7 @@ def pool_frame(splits: pd.DataFrame, pool: str) -> pd.DataFrame:
     return splits[splits["pool"] == pool].reset_index(drop=True)
 
 
-def fold_frames(
-    splits: pd.DataFrame, fold: int
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def fold_frames(splits: pd.DataFrame, fold: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     @brief Training and test frames for one cross-validation fold.
 
@@ -348,7 +346,9 @@ def _main() -> None:
     df = load_splits(path)
     k = n_folds(df)
     print(f"{path}\n  sha256 {splits_sha256(path)}\n")
-    print(f"{'pool/fold':>10} {'recordings':>11} {'patients':>9} {'segments':>10} {'abnormal':>9}")
+    print(
+        f"{'pool/fold':>10} {'recordings':>11} {'patients':>9} {'segments':>10} {'abnormal':>9}"
+    )
 
     def row(name: str, sub: pd.DataFrame) -> None:
         print(
