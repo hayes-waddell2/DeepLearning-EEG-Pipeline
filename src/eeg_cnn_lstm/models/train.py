@@ -122,6 +122,7 @@ eval:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import random
@@ -144,6 +145,8 @@ from eeg_cnn_lstm.utils.dataset import (
 )
 from eeg_cnn_lstm.utils.metrics import (
     DEFAULT_MAX_FPR,
+    DEFAULT_MIN_TPR,
+    DEFAULT_SENS_FLOOR,
     aggregate_to_recordings,
     compute_metrics,
     format_metrics,
@@ -165,8 +168,31 @@ AMP_DTYPES: dict[str, torch.dtype] = {
     "bf16": torch.bfloat16,
 }
 
-## @brief Key of the recording-level partial AUC in a `recording_metrics` dict.
+## @brief Key of the low-FPR recording-level partial AUC.
 PAUC_KEY = f"pauc_fpr{DEFAULT_MAX_FPR:g}"
+
+## @brief Key of the high-sensitivity recording-level partial AUC.
+PAUC_SENS_KEY = f"pauc_tpr{DEFAULT_MIN_TPR:g}"
+
+## @brief Key of the triage operating point's specificity.
+SPEC_AT_SENS_KEY = f"spec_at_sens{DEFAULT_SENS_FLOOR:g}"
+
+## @brief Selection metrics, mapped to `(source, key)`.
+#
+#  `recording_pauc_sens` is the HPO default. The partial AUC over FPR <= 0.10
+#  measures the few-false-alarms corner of the ROC, but the triage operating
+#  point ("catch 95% of abnormal recordings") sits near FPR 0.46 -- a part of
+#  the curve the low-FPR statistic never looks at. `recording_pauc_sens`
+#  measures the TPR >= 0.90 region instead, so the search optimizes where the
+#  deployed system actually operates, while staying an area statistic rather
+#  than a single-threshold one.
+SELECT_METRICS: dict[str, tuple[str, str]] = {
+    "recording_pauc": ("recording", PAUC_KEY),
+    "recording_pauc_sens": ("recording", PAUC_SENS_KEY),
+    "recording_spec_at_sens": ("recording", SPEC_AT_SENS_KEY),
+    "recording_auc": ("recording", "auc_roc"),
+    "segment_auc": ("segment", "auc_roc"),
+}
 
 # --------------
 # Set up helpers
@@ -566,6 +592,68 @@ def save_predictions(
 # ------------
 
 
+def deep_merge(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    """
+    @brief Recursively merge `updates` into a copy of `base`.
+
+    @details
+    Lets an HPO driver vary a handful of leaf values without writing a YAML
+    file per trial, and without clobbering the sections it does not touch:
+    `{"train": {"lr": 3e-4}}` changes the learning rate and leaves every other
+    `train` key intact.
+
+    @param base The config to start from; not mutated.
+    @param updates Nested partial config to overlay.
+    @return The merged config.
+    """
+    out = dict(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def build_model_config(overrides: Optional[dict[str, Any]] = None) -> ModelConfig:
+    """
+    @brief Build a `ModelConfig` from a config dict, rejecting unknown fields.
+
+    @details
+    The HPO search varies architecture parameters by name, from a search space
+    defined outside this module. A name that does not correspond to a real
+    `ModelConfig` field would otherwise be silently ignored: the search would
+    run for hours, report that the parameter had no effect, and the conclusion
+    would be an artifact of the typo. So unknown names raise here, and the
+    verification script exercises this path before any long run starts.
+
+    Field names and types are read from the dataclass itself, so this keeps
+    working as `ModelConfig` changes. Values for tuple-typed fields are
+    coerced from lists, since YAML has no tuple type.
+
+    @param overrides Mapping of `ModelConfig` field names to values; `None` or
+           empty gives the defaults.
+    @return The constructed `ModelConfig`.
+    @throws ValueError If a key is not a field of `ModelConfig`.
+    """
+    if not overrides:
+        return ModelConfig()
+    fields = {f.name: f for f in dataclasses.fields(ModelConfig)}
+    unknown = sorted(set(overrides) - set(fields))
+    if unknown:
+        raise ValueError(
+            f"model config has no field(s) {unknown}; "
+            f"valid fields are {sorted(fields)}"
+        )
+    kwargs: dict[str, Any] = {}
+    for name, value in overrides.items():
+        default = fields[name].default
+        if isinstance(default, tuple) and isinstance(value, list):
+            value = tuple(value)
+        kwargs[name] = value
+    return ModelConfig(**kwargs)
+
+
 def train(
     config_path: str,
     train_data_dir: str | None = None,
@@ -573,6 +661,8 @@ def train(
     num_epochs: int | None = None,
     max_steps: int = 0,
     fold: Optional[int] = None,
+    on_check: Optional[Callable[[int, float], bool]] = None,
+    config_overrides: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """
     @brief Run the full training routine driven by a YAML config.
@@ -584,10 +674,18 @@ def train(
     @param num_epochs Optional override for `train.num_epochs`.
     @param max_steps Optional cap on training steps per epoch (0 = no cap).
     @param fold Optional CV fold index; requires `data.splits_csv`.
+    @param on_check Called after every validation check as
+           `on_check(check_number, score)`. Returning True ends the run, which
+           is how an HPO pruner kills an unpromising trial mid-training. Raised
+           exceptions propagate, so `optuna.TrialPruned` works directly.
+    @param config_overrides Nested partial config merged over the YAML before
+           anything is built. How an HPO trial sets its hyperparameters.
     @return Dict with the best score, the best epoch's metrics and output
             paths, so an HPO driver can consume the result directly.
     """
     config = load_config(config_path)
+    if config_overrides:
+        config = deep_merge(config, config_overrides)
 
     data_cfg = config["data"]
     loader_cfg = config["loader"]
@@ -606,6 +704,8 @@ def train(
         overrides["max_steps"] = max_steps
     if fold is not None:
         train_cfg["fold"] = overrides["fold"] = fold
+    if config_overrides:
+        overrides["config_overrides"] = config_overrides
 
     set_seeds(int(loader_cfg.get("seed", 42)))
     device = select_device(str(train_cfg.get("device", "auto")))
@@ -676,23 +776,28 @@ def train(
         default_select = "segment_auc"
 
     select_metric = str(train_cfg.get("select_metric", default_select))
-    if select_metric not in {"recording_pauc", "segment_auc"}:
+    if select_metric not in SELECT_METRICS:
         raise ValueError(
-            "train.select_metric must be 'recording_pauc' or 'segment_auc'; "
+            f"train.select_metric must be one of {sorted(SELECT_METRICS)}; "
             f"got {select_metric!r}"
         )
-    if select_metric == "recording_pauc" and not splits_csv:
+    select_source, select_key = SELECT_METRICS[select_metric]
+    if select_source == "recording" and not splits_csv:
         logger.warning(
-            "select_metric=recording_pauc without data.splits_csv: selecting on "
-            "the legacy validation split."
+            f"select_metric={select_metric} without data.splits_csv: selecting "
+            "on the legacy validation split."
         )
 
     logger.info(f"Split info: {json.dumps(info, default=str)}")
     logger.info(f"Selection metric: {select_metric}; aggregator: {aggregator}")
 
     # ---- Model ----
-    model = CNN_LSTM(ModelConfig()).to(device)
-    logger.info(f"Model parameters: {model.num_parameters():,}")
+    model_cfg = build_model_config(config.get("model"))
+    model = CNN_LSTM(model_cfg).to(device)
+    n_params = model.num_parameters()
+    logger.info(f"Model parameters: {n_params:,}")
+    if config.get("model"):
+        logger.info(f"Model overrides: {json.dumps(config['model'], default=str)}")
 
     # ---- Optimizer / loss / AMP ----
     optimizer = torch.optim.AdamW(
@@ -700,7 +805,18 @@ def train(
         lr=float(train_cfg.get("lr", 1e-3)),
         weight_decay=float(train_cfg.get("weight_decay", 1e-4)),
     )
-    criterion = nn.BCEWithLogitsLoss()
+    # pos_weight scales the loss on positive (abnormal) examples. Above 1 it
+    # buys sensitivity at the cost of specificity, which is the trade this
+    # project cares about, so it is a searched parameter rather than a fixed 1.
+    pos_weight_val = train_cfg.get("pos_weight")
+    pos_weight = (
+        torch.tensor([float(pos_weight_val)], device=device)
+        if pos_weight_val is not None
+        else None
+    )
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    if pos_weight is not None:
+        logger.info(f"Loss pos_weight: {float(pos_weight_val):g}")
 
     use_amp = bool(train_cfg.get("use_amp", True)) and device.type == "cuda"
     amp_dtype_name = str(train_cfg.get("amp_dtype", "fp16")).lower()
@@ -787,7 +903,11 @@ def train(
         "resample_each_epoch": resample_each_epoch,
         "segments_per_recording": segment_cap,
         "select_metric": select_metric,
+        "select_key": select_key,
         "aggregator": aggregator,
+        "model": dict(config.get("model") or {}),
+        "n_parameters": n_params,
+        "pos_weight": float(pos_weight_val) if pos_weight_val is not None else None,
         "early_stopping": {**es_cfg, "steps_per_epoch": steps_per_epoch,
                            "eval_every_steps": eval_every},
         "lr_schedule": dict(train_cfg.get("lr_schedule") or {}),
@@ -842,6 +962,7 @@ def train(
         "best_rec": {},
         "last_check_step": -1,
         "last_record": None,
+        "stopped_by_caller": False,
     }
 
     def run_check(step_in_epoch: int, window_loss: float) -> bool:
@@ -869,11 +990,9 @@ def train(
         )
         val_s = time.perf_counter() - t_val
 
-        if select_metric == "recording_pauc":
-            score = float(rec_metrics.get(PAUC_KEY, float("nan")))
-        else:
-            score = float(seg_metrics.get("auc_roc", float("nan")))
-        if score != score:  # NaN: fall back to segment accuracy
+        source = rec_metrics if select_source == "recording" else seg_metrics
+        score = float(source.get(select_key, float("nan")))
+        if score != score:  # NaN (one class present, or floor unreachable)
             score = float(seg_metrics.get("accuracy", -float("inf")))
 
         if stopper is not None:
@@ -946,6 +1065,14 @@ def train(
         bench_path.write_text(json.dumps(bench, indent=2, default=str))
         if stop:
             logger.info(f"  early stop: {stopper.reason}")
+
+        # The hook runs last, after the checkpoint is on disk and the run
+        # record is written, so a pruner that raises cannot cost us the
+        # trial's history or its best weights.
+        if on_check is not None and on_check(check_no, score):
+            logger.info(f"  stopped by caller at check {check_no}")
+            state["stopped_by_caller"] = True
+            return True
         return stop
 
     stopped_early = False
@@ -1058,6 +1185,7 @@ def train(
         "epoch_budget": n_epochs,
         "checks_run": len(bench["checks"]),
         "stopped_early": stopped_early,
+        "stopped_by_caller": bool(state["stopped_by_caller"]),
         "restored_best": bool(restore_best and best_ckpt_path.exists()),
         "lr_final": current_lr(optimizer),
         **(stopper.state() if stopper else {"enabled": False}),
