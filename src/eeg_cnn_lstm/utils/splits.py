@@ -305,9 +305,7 @@ def make_split_loaders(
     info: dict[str, Any] = {
         "fold": fold,
         "normalize": normalize,
-        "splits_sha256": (
-            None if isinstance(splits, pd.DataFrame) else splits_sha256(splits)
-        ),
+        "splits_sha256": (None if isinstance(splits, pd.DataFrame) else splits_sha256(splits)),
         "train": train_set.describe(),
         "tune": tune_set.describe(),
         "test": test_set.describe() if test_set is not None else None,
@@ -346,9 +344,7 @@ def _main() -> None:
     df = load_splits(path)
     k = n_folds(df)
     print(f"{path}\n  sha256 {splits_sha256(path)}\n")
-    print(
-        f"{'pool/fold':>10} {'recordings':>11} {'patients':>9} {'segments':>10} {'abnormal':>9}"
-    )
+    print(f"{'pool/fold':>10} {'recordings':>11} {'patients':>9} {'segments':>10} {'abnormal':>9}")
 
     def row(name: str, sub: pd.DataFrame) -> None:
         print(

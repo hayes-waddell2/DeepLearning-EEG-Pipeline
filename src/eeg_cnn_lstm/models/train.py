@@ -66,7 +66,8 @@ Phase 2 / Step 2 additions (early stopping and LR scheduling):
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml --fold 3
 python -m eeg_cnn_lstm.models.train --config configs/baseline.yaml \
-    --train-data-dir /tmp/$USER/$SLURM_JOB_ID/train --output-dir runs/bench --num-epochs 1
+    --train-data-dir /tmp/$USER/$SLURM_JOB_ID/train \
+    --output-dir runs/bench --num-epochs 1
 @endverbatim
 
 @par Config schema:
@@ -102,7 +103,8 @@ train:
   aggregator: str             # optional; segment->recording method, default mean
   early_stopping:             # optional; omit or enabled:false for Phase 1 behaviour
     enabled: bool
-    val_every_frac: float     # validate every this fraction of an epoch (0 = epoch end only)
+    val_every_frac: float     # fraction of an epoch between checks
+                              # (0 = epoch boundary only)
     patience: int             # non-improving CHECKS tolerated (scales with the cadence)
     min_delta: float          # absolute improvement that counts as progress
     min_checks: int           # optional warm-up before stopping is allowed
@@ -381,9 +383,7 @@ def train_one_epoch(
         y = y.to(device, non_blocking=True)
 
         optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(
-            device_type=device.type, dtype=amp_dtype, enabled=use_amp
-        ):
+        with torch.amp.autocast(device_type=device.type, dtype=amp_dtype, enabled=use_amp):
             logits = model(x)
             loss = criterion(logits, y)
 
@@ -642,8 +642,7 @@ def build_model_config(overrides: Optional[dict[str, Any]] = None) -> ModelConfi
     unknown = sorted(set(overrides) - set(fields))
     if unknown:
         raise ValueError(
-            f"model config has no field(s) {unknown}; "
-            f"valid fields are {sorted(fields)}"
+            f"model config has no field(s) {unknown}; " f"valid fields are {sorted(fields)}"
         )
     kwargs: dict[str, Any] = {}
     for name, value in overrides.items():
@@ -810,9 +809,7 @@ def train(
     # project cares about, so it is a searched parameter rather than a fixed 1.
     pos_weight_val = train_cfg.get("pos_weight")
     pos_weight = (
-        torch.tensor([float(pos_weight_val)], device=device)
-        if pos_weight_val is not None
-        else None
+        torch.tensor([float(pos_weight_val)], device=device) if pos_weight_val is not None else None
     )
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     if pos_weight is not None:
@@ -822,13 +819,11 @@ def train(
     amp_dtype_name = str(train_cfg.get("amp_dtype", "fp16")).lower()
     if amp_dtype_name not in AMP_DTYPES:
         raise ValueError(
-            f"train.amp_dtype must be one of {sorted(AMP_DTYPES)}; got {amp_dtype_name!r}"
+            "train.amp_dtype must be one of " f"{sorted(AMP_DTYPES)}; got {amp_dtype_name!r}"
         )
     amp_dtype = AMP_DTYPES[amp_dtype_name]
     # FP16 needs dynamic loss scaling; BF16 has FP32's range and does not.
-    scaler = torch.amp.GradScaler(
-        "cuda", enabled=use_amp and amp_dtype is torch.float16
-    )
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp and amp_dtype is torch.float16)
     grad_clip = float(train_cfg.get("grad_clip", 1.0))
     log_every = int(train_cfg.get("log_every", 200))
 
@@ -842,8 +837,7 @@ def train(
     val_every_frac = float(es_cfg.get("val_every_frac") or 0.0)
     if not 0.0 <= val_every_frac <= 1.0:
         raise ValueError(
-            "train.early_stopping.val_every_frac must be in [0, 1]; "
-            f"got {val_every_frac}"
+            "train.early_stopping.val_every_frac must be in [0, 1]; " f"got {val_every_frac}"
         )
 
     stopper = (
@@ -869,9 +863,7 @@ def train(
     steps_per_epoch = len(train_loader)
     if max_steps:
         steps_per_epoch = min(steps_per_epoch, max_steps)
-    eval_every = (
-        int(round(steps_per_epoch * val_every_frac)) if val_every_frac > 0 else 0
-    )
+    eval_every = int(round(steps_per_epoch * val_every_frac)) if val_every_frac > 0 else 0
     if eval_every >= steps_per_epoch:
         eval_every = 0
 
@@ -895,9 +887,7 @@ def train(
         "fold": fold_idx,
         "device": str(device),
         "amp_dtype": precision,
-        "gpu_name": (
-            torch.cuda.get_device_name(device) if device.type == "cuda" else None
-        ),
+        "gpu_name": (torch.cuda.get_device_name(device) if device.type == "cuda" else None),
         "batch_size": batch_size,
         "num_workers": num_workers,
         "normalize": normalize,
@@ -920,9 +910,7 @@ def train(
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "stage_seconds": (
-            float(os.environ["STAGE_SECONDS"])
-            if os.environ.get("STAGE_SECONDS")
-            else None
+            float(os.environ["STAGE_SECONDS"]) if os.environ.get("STAGE_SECONDS") else None
         ),
         "split_info": info,
         "epochs": [],
@@ -937,8 +925,7 @@ def train(
 
     if eval_every:
         cadence = (
-            f"every {eval_every:,} steps ({val_every_frac:g} epoch) "
-            "plus the epoch boundary"
+            f"every {eval_every:,} steps ({val_every_frac:g} epoch) " "plus the epoch boundary"
         )
     else:
         cadence = "at the epoch boundary only"
@@ -950,8 +937,7 @@ def train(
     else:
         policy = "early stopping disabled, running the full budget"
     logger.info(
-        f"Epoch budget: {n_epochs} x {steps_per_epoch:,} steps; "
-        f"validating {cadence}; {policy}."
+        f"Epoch budget: {n_epochs} x {steps_per_epoch:,} steps; " f"validating {cadence}; {policy}."
     )
     if scheduler is not None:
         logger.info(
@@ -994,9 +980,7 @@ def train(
         epoch = int(state["epoch"])
         t_val = time.perf_counter()
         val_loss, arrays = collect_predictions(model, val_loader, criterion, device)
-        seg_metrics, rec_metrics = summarize_predictions(
-            arrays, val_loader.dataset, aggregator
-        )
+        seg_metrics, rec_metrics = summarize_predictions(arrays, val_loader.dataset, aggregator)
         val_s = time.perf_counter() - t_val
 
         source = rec_metrics if select_source == "recording" else seg_metrics
@@ -1030,9 +1014,7 @@ def train(
             f"bad={n_bad}/{stopper.patience if stopper else '-'}  "
             f"eval {val_s / 60:.1f} min"
         )
-        logger.info(
-            f"    {format_recording_metrics(rec_metrics, prefix=f'{val_name}rec')}"
-        )
+        logger.info(f"    {format_recording_metrics(rec_metrics, prefix=f'{val_name}rec')}")
         if lr_after < lr_before:
             logger.info(f"    LR reduced {lr_before:.2e} -> {lr_after:.2e}")
 
@@ -1117,20 +1099,18 @@ def train(
         # exact step or the run stopped inside the epoch.
         if not stopped_early and state["last_check_step"] != steps_done:
             tail = t_stats.get("tail_loss")
-            stopped_early = run_check(
-                steps_done, float(tail if tail is not None else train_loss)
-            )
+            stopped_early = run_check(steps_done, float(tail if tail is not None else train_loss))
 
         last = state["last_record"] or {}
+        seg_summary = format_metrics(last.get("segment_metrics", {}), prefix=f"{val_name}seg")
         logger.info(
             f"Epoch {epoch}/{n_epochs}  "
             f"train_loss={train_loss:.4f}  "
             f"{val_name}_loss={last.get('val_loss', float('nan')):.4f}  "
-            f"{format_metrics(last.get('segment_metrics', {}), prefix=f'{val_name}seg')}"
+            f"{seg_summary}"
         )
         val_total_min = (
-            float(t_stats["mid_epoch_eval_seconds"])
-            + float(last.get("val_seconds") or 0.0)
+            float(t_stats["mid_epoch_eval_seconds"]) + float(last.get("val_seconds") or 0.0)
         ) / 60
         logger.info(
             f"  timing: train {t_stats['epoch_seconds'] / 60:.1f} min "
@@ -1165,8 +1145,7 @@ def train(
 
     if stopped_early:
         logger.info(
-            f"Stopped early after {epochs_run} epoch(s) / "
-            f"{len(bench['checks'])} checks."
+            f"Stopped early after {epochs_run} epoch(s) / " f"{len(bench['checks'])} checks."
         )
     else:
         logger.info(f"Reached the {n_epochs}-epoch budget without early stopping.")
@@ -1208,12 +1187,8 @@ def train(
     if test_loader is not None:
         logger.info(f"Scoring held-out fold {fold_idx} with the best checkpoint...")
         model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
-        test_loss, test_arrays = collect_predictions(
-            model, test_loader, criterion, device
-        )
-        test_seg, test_rec = summarize_predictions(
-            test_arrays, test_loader.dataset, aggregator
-        )
+        test_loss, test_arrays = collect_predictions(model, test_loader, criterion, device)
+        test_seg, test_rec = summarize_predictions(test_arrays, test_loader.dataset, aggregator)
         test_pred_path = output_dir_p / "predictions_test.npz"
         save_predictions(test_pred_path, test_arrays, test_loader.dataset)
         logger.info(f"  fold {fold_idx} loss={test_loss:.4f}")
@@ -1240,12 +1215,8 @@ def train(
             clip_uv=clip_uv,
         )
         model.load_state_dict(torch.load(best_ckpt_path, map_location=device))
-        final_loss, final_arrays = collect_predictions(
-            model, eval_loader, criterion, device
-        )
-        final_seg, final_rec = summarize_predictions(
-            final_arrays, eval_loader.dataset, aggregator
-        )
+        final_loss, final_arrays = collect_predictions(model, eval_loader, criterion, device)
+        final_seg, final_rec = summarize_predictions(final_arrays, eval_loader.dataset, aggregator)
         final_pred_path = output_dir_p / "predictions_eval.npz"
         save_predictions(final_pred_path, final_arrays, eval_loader.dataset)
         logger.info(f"Eval loss: {final_loss:.4f}")
@@ -1281,12 +1252,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override data.train_data_dir (e.g. node-local staged copy)",
     )
-    parser.add_argument(
-        "--output-dir", type=str, default=None, help="Override train.output_dir"
-    )
-    parser.add_argument(
-        "--num-epochs", type=int, default=None, help="Override train.num_epochs"
-    )
+    parser.add_argument("--output-dir", type=str, default=None, help="Override train.output_dir")
+    parser.add_argument("--num-epochs", type=int, default=None, help="Override train.num_epochs")
     parser.add_argument(
         "--max-steps",
         type=int,

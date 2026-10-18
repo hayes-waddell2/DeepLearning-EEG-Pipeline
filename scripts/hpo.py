@@ -140,7 +140,7 @@ def make_study(
         sampler=TPESampler(
             seed=seed,
             n_startup_trials=n_startup,
-            multivariate=True,   # parameters interact; model them jointly
+            multivariate=True,  # parameters interact; model them jointly
             group=True,
         ),
         pruner=pruner,
@@ -226,8 +226,7 @@ def make_objective(
         logger.info(
             f"--- trial {trial.number}: "
             + "  ".join(
-                f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
-                for k, v in params.items()
+                f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}" for k, v in params.items()
             )
         )
 
@@ -255,8 +254,8 @@ def make_objective(
             raise
         except FATAL as exc:
             logger.error(f"trial {trial.number} hit a fatal error: {exc!r}")
-            raise                      # every trial would fail the same way
-        except Exception as exc:       # noqa: BLE001 - one bad config is survivable
+            raise  # every trial would fail the same way
+        except Exception as exc:  # noqa: BLE001 - one bad config is survivable
             logger.exception(f"trial {trial.number} failed: {exc!r}")
             return FAILED_SCORE
         minutes = (time.perf_counter() - t0) / 60
@@ -316,9 +315,11 @@ def report(study: optuna.Study, top_k: int, out_dir: Optional[Path]) -> dict[str
     @param out_dir Where to write `top_k.json` and `trials.csv`; `None` skips.
     @return The summary dict.
     """
-    done = [t for t in study.get_trials(deepcopy=False)
-            if t.state == TrialState.COMPLETE and t.value is not None
-            and t.value > FAILED_SCORE]
+    done = [
+        t
+        for t in study.get_trials(deepcopy=False)
+        if t.state == TrialState.COMPLETE and t.value is not None and t.value > FAILED_SCORE
+    ]
     states: dict[str, int] = {}
     for t in study.get_trials(deepcopy=False):
         states[t.state.name] = states.get(t.state.name, 0) + 1
@@ -403,46 +404,86 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     @return Parsed namespace.
     """
     p = argparse.ArgumentParser(description="Optuna hyperparameter search.")
-    p.add_argument("--config", default="configs/step2_earlystop.yaml",
-                   help="Base YAML config; the search overrides leaves of it")
-    p.add_argument("--study-name", default="eeg-hpo-v1",
-                   help="Study name; the resume key")
-    p.add_argument("--storage", default=None,
-                   help="SQLAlchemy URL, e.g. sqlite:///runs/hpo/study.db. "
-                        "Without it the study is in memory and is lost on exit")
-    p.add_argument("--train-data-dir", default=None,
-                   help="Override data.train_data_dir for every trial, e.g. a "
-                        "node-local staged copy")
-    p.add_argument("--out-dir", default="runs/hpo",
-                   help="Per-trial run directories and the final report")
+    p.add_argument(
+        "--config",
+        default="configs/step2_earlystop.yaml",
+        help="Base YAML config; the search overrides leaves of it",
+    )
+    p.add_argument("--study-name", default="eeg-hpo-v1", help="Study name; the resume key")
+    p.add_argument(
+        "--storage",
+        default=None,
+        help="SQLAlchemy URL, e.g. sqlite:///runs/hpo/study.db. "
+        "Without it the study is in memory and is lost on exit",
+    )
+    p.add_argument(
+        "--train-data-dir",
+        default=None,
+        help="Override data.train_data_dir for every trial, e.g. a " "node-local staged copy",
+    )
+    p.add_argument(
+        "--out-dir",
+        default="runs/hpo",
+        help="Per-trial run directories and the final report",
+    )
     p.add_argument("--n-trials", type=int, default=70, help="Trials to run")
-    p.add_argument("--timeout-hours", type=float, default=None,
-                   help="Stop cleanly after this long; set below the SLURM limit")
-    p.add_argument("--num-epochs", type=int, default=None,
-                   help="Override the epoch budget per trial")
-    p.add_argument("--max-steps", type=int, default=0,
-                   help="Cap steps per epoch (0 = uncapped); for smoke runs")
-    p.add_argument("--objective", default=DEFAULT_OBJECTIVE,
-                   help="train.select_metric to optimize")
-    p.add_argument("--prune", default="hyperband",
-                   choices=["hyperband", "median", "none"])
-    p.add_argument("--prune-warmup-checks", type=int, default=8,
-                   help="Checks a trial gets before it may be pruned. The "
-                        "metric varies ~0.02 between checks, so pruning early "
-                        "kills good trials on noise")
-    p.add_argument("--n-startup", type=int, default=15,
-                   help="Random trials before TPE's model takes over")
+    p.add_argument(
+        "--timeout-hours",
+        type=float,
+        default=None,
+        help="Stop cleanly after this long; set below the SLURM limit",
+    )
+    p.add_argument(
+        "--num-epochs",
+        type=int,
+        default=None,
+        help="Override the epoch budget per trial",
+    )
+    p.add_argument(
+        "--max-steps",
+        type=int,
+        default=0,
+        help="Cap steps per epoch (0 = uncapped); for smoke runs",
+    )
+    p.add_argument("--objective", default=DEFAULT_OBJECTIVE, help="train.select_metric to optimize")
+    p.add_argument("--prune", default="hyperband", choices=["hyperband", "median", "none"])
+    p.add_argument(
+        "--prune-warmup-checks",
+        type=int,
+        default=8,
+        help="Checks a trial gets before it may be pruned. The "
+        "metric varies ~0.02 between checks, so pruning early "
+        "kills good trials on noise",
+    )
+    p.add_argument(
+        "--n-startup",
+        type=int,
+        default=15,
+        help="Random trials before TPE's model takes over",
+    )
     p.add_argument("--seed", type=int, default=42, help="Sampler seed")
-    p.add_argument("--top-k", type=int, default=5,
-                   help="Configurations to export for seed validation")
-    p.add_argument("--keep-artifacts", action="store_true",
-                   help="Keep every trial's checkpoint and predictions")
-    p.add_argument("--no-startup-trials", action="store_true",
-                   help="Skip the bracketing startup points")
-    p.add_argument("--report-only", action="store_true",
-                   help="Summarize an existing study and exit")
-    p.add_argument("--describe", action="store_true",
-                   help="Print the search space and exit")
+    p.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Configurations to export for seed validation",
+    )
+    p.add_argument(
+        "--keep-artifacts",
+        action="store_true",
+        help="Keep every trial's checkpoint and predictions",
+    )
+    p.add_argument(
+        "--no-startup-trials",
+        action="store_true",
+        help="Skip the bracketing startup points",
+    )
+    p.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Summarize an existing study and exit",
+    )
+    p.add_argument("--describe", action="store_true", help="Print the search space and exit")
     return p.parse_args(argv)
 
 
@@ -493,8 +534,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         + (f", {args.timeout_hours:g} h" if args.timeout_hours else "")
     )
 
-    already = len([t for t in study.get_trials(deepcopy=False)
-                   if t.state in (TrialState.COMPLETE, TrialState.PRUNED)])
+    already = len(
+        [
+            t
+            for t in study.get_trials(deepcopy=False)
+            if t.state in (TrialState.COMPLETE, TrialState.PRUNED)
+        ]
+    )
     if already:
         logger.info(f"Resuming: {already} trial(s) already recorded.")
     if not args.no_startup_trials:

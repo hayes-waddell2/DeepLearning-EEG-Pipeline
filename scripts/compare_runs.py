@@ -201,7 +201,8 @@ def print_comparison(rows: list[dict[str, Any]], n_boot: int) -> None:
             print(
                 f"  {r['run']:<14} "
                 f"AUC {fmt(r['auc'], 6)} [{fmt(r.get('auc_lo'), 6)},{fmt(r.get('auc_hi'), 6)}]   "
-                f"pAUC {fmt(r['pauc'], 6)} [{fmt(r.get('pauc_lo'), 6)},{fmt(r.get('pauc_hi'), 6)}]   "
+                f"pAUC {fmt(r['pauc'], 6)} "
+                f"[{fmt(r.get('pauc_lo'), 6)},{fmt(r.get('pauc_hi'), 6)}]   "
                 f"spec@sens.95 {fmt(r['spec_at_sens95'], 6)} "
                 f"[{fmt(r.get('spec_at_sens95_lo'), 6)},{fmt(r.get('spec_at_sens95_hi'), 6)}]"
             )
@@ -212,9 +213,7 @@ def print_comparison(rows: list[dict[str, Any]], n_boot: int) -> None:
             f"\nDelta ({b['run']} - {a['run']}): "
             f"AUC {b['auc'] - a['auc']:+.4f}   pAUC {b['pauc'] - a['pauc']:+.4f}"
         )
-        print(
-            "  Overlapping CIs mean the difference is not resolved by this comparison."
-        )
+        print("  Overlapping CIs mean the difference is not resolved by this comparison.")
 
 
 def print_sweep(name: str, rows: list[dict[str, Any]]) -> None:
@@ -225,7 +224,10 @@ def print_sweep(name: str, rows: list[dict[str, Any]]) -> None:
     @param rows Output of `sweep_aggregators`.
     """
     print(f"\n{'=' * 96}\nAGGREGATOR SWEEP: {name}  (ranked by pAUC)\n{'=' * 96}")
-    head = f"{'aggregator':<18}{'AUC':>9}{'pAUC':>9}{'sens@sp.9':>11}{'spec@se.95':>12}{'sens':>8}{'spec':>8}"
+    head = (
+        f"{'aggregator':<18}{'AUC':>9}{'pAUC':>9}{'sens@sp.9':>11}"
+        f"{'spec@se.95':>12}{'sens':>8}{'spec':>8}"
+    )
     print(head)
     print("-" * len(head))
     for r in rows:
@@ -238,9 +240,7 @@ def print_sweep(name: str, rows: list[dict[str, Any]]) -> None:
 
 def main() -> int:
     """@brief CLI entrypoint. @return 0 on success, non-zero on bad input."""
-    p = argparse.ArgumentParser(
-        description="Compare runs and aggregators from saved predictions"
-    )
+    p = argparse.ArgumentParser(description="Compare runs and aggregators from saved predictions")
     p.add_argument(
         "runs",
         nargs="+",
@@ -268,25 +268,19 @@ def main() -> int:
 
     if args.aggregator not in AGGREGATORS:
         print(
-            f"ERROR: unknown aggregator {args.aggregator!r}; "
-            f"choose from {sorted(AGGREGATORS)}",
+            f"ERROR: unknown aggregator {args.aggregator!r}; " f"choose from {sorted(AGGREGATORS)}",
             file=sys.stderr,
         )
         return 2
 
-    rows = [
-        run_row(name, pred, args.aggregator, args.n_boot, args.seed)
-        for name, pred in runs
-    ]
+    rows = [run_row(name, pred, args.aggregator, args.n_boot, args.seed) for name, pred in runs]
     print_comparison(rows, args.n_boot)
 
     sweeps: dict[str, list[dict[str, Any]]] = {}
     if not args.no_sweep:
         for name, pred in runs:
             probs = sigmoid(pred["logits"].astype(np.float64))
-            sweep = sweep_aggregators(
-                probs, pred["rec_idx"], pred["rec_label"].astype(int)
-            )
+            sweep = sweep_aggregators(probs, pred["rec_idx"], pred["rec_label"].astype(int))
             sweeps[name] = sweep
             print_sweep(name, sweep)
 

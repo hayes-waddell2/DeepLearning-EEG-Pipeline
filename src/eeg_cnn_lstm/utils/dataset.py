@@ -180,9 +180,7 @@ def build_subject_disjoint_split(
     # Assign each subject a single representative label (mode across their
     # recordings) purely to stratify the val sampling. Disjointness is enforced
     # by the final isin() check, not by this label.
-    subject_label = manifest.groupby("subject_id")["label"].agg(
-        lambda s: int(s.mode().iat[0])
-    )
+    subject_label = manifest.groupby("subject_id")["label"].agg(lambda s: int(s.mode().iat[0]))
 
     val_subjects: set[str] = set()
     for label_value in sorted(subject_label.unique()):
@@ -267,9 +265,7 @@ class TUABEpochDataset(Dataset):
         """
         super().__init__()
         if normalize not in NORMALIZE_MODES:
-            raise ValueError(
-                f"normalize must be one of {NORMALIZE_MODES}; got {normalize!r}"
-            )
+            raise ValueError(f"normalize must be one of {NORMALIZE_MODES}; got {normalize!r}")
 
         self._data_dir = Path(data_dir)
         self._normalize = normalize
@@ -292,18 +288,12 @@ class TUABEpochDataset(Dataset):
                 self._clip_uv = float(stats["clip_uv"])
 
         # Recording table: row position is the rec_idx returned by __getitem__.
-        cols = [
-            c for c in ("filename", "subject_id", "label", "n_epochs") if c in manifest
-        ]
+        cols = [c for c in ("filename", "subject_id", "label", "n_epochs") if c in manifest]
         self.recordings: pd.DataFrame = manifest[cols].reset_index(drop=True).copy()
         if "subject_id" not in self.recordings:
-            self.recordings["subject_id"] = self.recordings["filename"].map(
-                parse_subject_id
-            )
+            self.recordings["subject_id"] = self.recordings["filename"].map(parse_subject_id)
 
-        self._paths: list[str] = [
-            str(self._data_dir / f) for f in self.recordings["filename"]
-        ]
+        self._paths: list[str] = [str(self._data_dir / f) for f in self.recordings["filename"]]
         self._n_epochs = self.recordings["n_epochs"].to_numpy(dtype=np.int64)
         self._labels = self.recordings["label"].to_numpy(dtype=np.int8)
 
@@ -330,9 +320,7 @@ class TUABEpochDataset(Dataset):
         epoch sees a different subset but any run is reproducible.
         """
         if not self._cap:
-            rec = np.repeat(
-                np.arange(len(self._n_epochs), dtype=np.int32), self._n_epochs
-            )
+            rec = np.repeat(np.arange(len(self._n_epochs), dtype=np.int32), self._n_epochs)
             seg = (
                 np.concatenate([np.arange(n, dtype=np.int32) for n in self._n_epochs])
                 if len(self._n_epochs)
@@ -424,9 +412,7 @@ class TUABEpochDataset(Dataset):
         @brief Number of indexed segments per recording, aligned to `recordings`.
         @return int64 array of length `len(self.recordings)`.
         """
-        return np.bincount(self._rec_of_sample, minlength=len(self.recordings)).astype(
-            np.int64
-        )
+        return np.bincount(self._rec_of_sample, minlength=len(self.recordings)).astype(np.int64)
 
     def describe(self) -> dict[str, Any]:
         """
@@ -546,9 +532,7 @@ def make_train_val_dataloaders(
             split-size diagnostics.
     """
     manifest = load_manifest(manifest_path)
-    train_df, val_df = build_subject_disjoint_split(
-        manifest, val_frac=val_frac, seed=seed
-    )
+    train_df, val_df = build_subject_disjoint_split(manifest, val_frac=val_frac, seed=seed)
 
     common = dict(
         normalize=normalize,

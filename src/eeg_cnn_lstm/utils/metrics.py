@@ -72,8 +72,7 @@ def compute_metrics(
     """
     if logits.shape[0] != labels.shape[0]:
         raise ValueError(
-            f"Length mismatch: logits {tuple(logits.shape)} "
-            f"vs labels {tuple(labels.shape)}"
+            f"Length mismatch: logits {tuple(logits.shape)} " f"vs labels {tuple(labels.shape)}"
         )
 
     logits_np = logits.detach().cpu().numpy().ravel()
@@ -260,9 +259,7 @@ def aggregate_to_recordings(
     return out
 
 
-def partial_auc(
-    labels: np.ndarray, scores: np.ndarray, max_fpr: float = DEFAULT_MAX_FPR
-) -> float:
+def partial_auc(labels: np.ndarray, scores: np.ndarray, max_fpr: float = DEFAULT_MAX_FPR) -> float:
     """
     @brief Standardized partial AUC over FPR in [0, `max_fpr`].
 
@@ -473,9 +470,7 @@ def recording_metrics(
     out[f"spec_at_sens{sens_floor:g}"] = spec
 
     if threshold is None:
-        threshold = (
-            thr_sens if np.isfinite(thr_sens) else youden_threshold(labels, scores)
-        )
+        threshold = thr_sens if np.isfinite(thr_sens) else youden_threshold(labels, scores)
     out.update(metrics_at_threshold(labels, scores, float(threshold)))
     return out
 
@@ -595,9 +590,7 @@ def sweep_aggregators(
     return rows
 
 
-def format_recording_metrics(
-    metrics: Mapping[str, float | int], prefix: str = ""
-) -> str:
+def format_recording_metrics(metrics: Mapping[str, float | int], prefix: str = "") -> str:
     """
     @brief One-line summary of a recording-level metric dict, for logs.
 
@@ -607,12 +600,8 @@ def format_recording_metrics(
     """
     p = f"{prefix} " if prefix else ""
     pauc = next((v for k, v in metrics.items() if k.startswith("pauc")), float("nan"))
-    sens_spec = next(
-        (v for k, v in metrics.items() if k.startswith("sens_at_spec")), float("nan")
-    )
-    spec_sens = next(
-        (v for k, v in metrics.items() if k.startswith("spec_at_sens")), float("nan")
-    )
+    sens_spec = next((v for k, v in metrics.items() if k.startswith("sens_at_spec")), float("nan"))
+    spec_sens = next((v for k, v in metrics.items() if k.startswith("spec_at_sens")), float("nan"))
     return (
         f"{p}n={metrics.get('n_recordings', 0)}  "
         f"auc={metrics.get('auc_roc', float('nan')):.4f}  "
@@ -663,7 +652,7 @@ def _main() -> None:
     print("segment level:", format_metrics(seg, prefix="seg"))
 
     print(
-        f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} {'sens@spec.9':>12} {'spec@sens.95':>13}"
+        f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} " f"{'sens@spec.9':>12} {'spec@sens.95':>13}"
     )
     for row in sweep_aggregators(probs, rec_idx, rec_labels):
         print(

@@ -134,29 +134,51 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Derive the Step 2 early-stopping config from a baseline."
     )
-    p.add_argument("--baseline", default="configs/baseline.yaml",
-                   help="Config to inherit data and loader settings from")
-    p.add_argument("--out", default="configs/step2_earlystop.yaml",
-                   help="Destination config path")
-    p.add_argument("--output-dir", default="runs/step2-earlystop",
-                   help="train.output_dir for the Step 2 run")
-    p.add_argument("--num-epochs", type=int, default=20,
-                   help="Upper bound on epochs (early stopping ends the run)")
-    p.add_argument("--val-every-frac", type=float, default=0.25,
-                   help="Fraction of an epoch between validation checks")
-    p.add_argument("--patience-epochs", type=float, default=3.0,
-                   help="Epochs of no improvement before stopping")
-    p.add_argument("--lr-patience-epochs", type=float, default=1.0,
-                   help="Epochs of no improvement before halving the LR")
-    p.add_argument("--min-delta", type=float, default=0.002,
-                   help="Absolute improvement that counts as progress")
-    p.add_argument("--factor", type=float, default=0.5,
-                   help="LR multiplier on plateau")
+    p.add_argument(
+        "--baseline",
+        default="configs/baseline.yaml",
+        help="Config to inherit data and loader settings from",
+    )
+    p.add_argument("--out", default="configs/step2_earlystop.yaml", help="Destination config path")
+    p.add_argument(
+        "--output-dir", default="runs/step2-earlystop", help="train.output_dir for the Step 2 run"
+    )
+    p.add_argument(
+        "--num-epochs",
+        type=int,
+        default=20,
+        help="Upper bound on epochs (early stopping ends the run)",
+    )
+    p.add_argument(
+        "--val-every-frac",
+        type=float,
+        default=0.25,
+        help="Fraction of an epoch between validation checks",
+    )
+    p.add_argument(
+        "--patience-epochs",
+        type=float,
+        default=3.0,
+        help="Epochs of no improvement before stopping",
+    )
+    p.add_argument(
+        "--lr-patience-epochs",
+        type=float,
+        default=1.0,
+        help="Epochs of no improvement before halving the LR",
+    )
+    p.add_argument(
+        "--min-delta",
+        type=float,
+        default=0.002,
+        help="Absolute improvement that counts as progress",
+    )
+    p.add_argument("--factor", type=float, default=0.5, help="LR multiplier on plateau")
     p.add_argument("--min-lr", type=float, default=1e-6, help="LR floor")
-    p.add_argument("--overwrite", action="store_true",
-                   help="Replace the destination if it already exists")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print the train block and write nothing")
+    p.add_argument(
+        "--overwrite", action="store_true", help="Replace the destination if it already exists"
+    )
+    p.add_argument("--dry-run", action="store_true", help="Print the train block and write nothing")
     return p.parse_args()
 
 
@@ -171,8 +193,7 @@ def main() -> int:
         print(f"error: baseline config not found: {base_p}", file=sys.stderr)
         return 1
     if out_p.exists() and not (a.overwrite or a.dry_run):
-        print(f"error: {out_p} exists; pass --overwrite to replace it",
-              file=sys.stderr)
+        print(f"error: {out_p} exists; pass --overwrite to replace it", file=sys.stderr)
         return 1
 
     baseline = yaml.safe_load(base_p.read_text())
@@ -191,7 +212,8 @@ def main() -> int:
     # Inheritance check: anything Step 2 did not deliberately change must be
     # byte-identical to the baseline, or the two runs are not comparable.
     changed = [
-        k for k in set(baseline.get("train", {})) | set(cfg["train"])
+        k
+        for k in set(baseline.get("train", {})) | set(cfg["train"])
         if baseline.get("train", {}).get(k) != cfg["train"].get(k)
     ]
     unexpected = sorted(set(changed) - set(STEP2_KEYS))
@@ -199,17 +221,22 @@ def main() -> int:
         if baseline.get(section) != cfg.get(section):
             unexpected.append(section)
     if unexpected:
-        print(f"error: unexpected divergence from the baseline: {unexpected}",
-              file=sys.stderr)
+        print(f"error: unexpected divergence from the baseline: {unexpected}", file=sys.stderr)
         return 1
 
     print(f"Baseline:      {base_p}")
-    print(f"Cadence:       every {a.val_every_frac:g} epoch "
-          f"(~{derived['checks_per_epoch']} checks/epoch)")
-    print(f"Stop patience: {derived['stop_patience_checks']} checks "
-          f"(= {a.patience_epochs:g} epochs)")
-    print(f"LR patience:   {derived['lr_patience_checks']} checks "
-          f"(= {a.lr_patience_epochs:g} epochs), factor {a.factor:g}")
+    print(
+        f"Cadence:       every {a.val_every_frac:g} epoch "
+        f"(~{derived['checks_per_epoch']} checks/epoch)"
+    )
+    print(
+        f"Stop patience: {derived['stop_patience_checks']} checks "
+        f"(= {a.patience_epochs:g} epochs)"
+    )
+    print(
+        f"LR patience:   {derived['lr_patience_checks']} checks "
+        f"(= {a.lr_patience_epochs:g} epochs), factor {a.factor:g}"
+    )
     print(f"Epoch budget:  {a.num_epochs} (upper bound)")
     print("Inherited:     data, loader, eval and all other train keys\n")
     print(yaml.safe_dump({"train": cfg["train"]}, sort_keys=False))

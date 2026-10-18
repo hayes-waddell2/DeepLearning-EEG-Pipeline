@@ -194,13 +194,23 @@ def fake_train_factory(
             (Path(output_dir) / "benchmark.json").write_text("{}")
 
         return {
-            "best": {"score": best, "check": 8, "epoch_frac": 2.0,
-                     "recording_metrics": {
-                         "auc_roc": best + 0.09, "pauc_fpr0.1": best - 0.01,
-                         "pauc_tpr0.9": best, "sens_at_spec0.9": best - 0.03,
-                         "spec_at_sens0.95": best - 0.27}},
-            "stopping": {"epochs_run": 5, "checks_run": n_checks,
-                         "stopped_early": True},
+            "best": {
+                "score": best,
+                "check": 8,
+                "epoch_frac": 2.0,
+                "recording_metrics": {
+                    "auc_roc": best + 0.09,
+                    "pauc_fpr0.1": best - 0.01,
+                    "pauc_tpr0.9": best,
+                    "sens_at_spec0.9": best - 0.03,
+                    "spec_at_sens0.95": best - 0.27,
+                },
+            },
+            "stopping": {
+                "epochs_run": 5,
+                "checks_run": n_checks,
+                "stopped_early": True,
+            },
             "n_parameters": int(1e5 + hidden * 800),
         }
 
@@ -214,7 +224,13 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
     @param checks Recorder to report into.
     @param keep Keep the temporary working directory for inspection.
     """
-    from scripts.hpo import FAILED_SCORE, enqueue_startup, make_objective, make_study, report
+    from scripts.hpo import (
+        FAILED_SCORE,
+        enqueue_startup,
+        make_objective,
+        make_study,
+        report,
+    )
 
     tmp = Path(tempfile.mkdtemp(prefix="hpo_verify_"))
     db = f"sqlite:///{tmp / 'study.db'}"
@@ -228,6 +244,7 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
         assert len(paths) == len(set(paths)), "two parameters write the same path"
         for p in SEARCH_SPACE:
             assert p.why.strip(), f"{p.name} has no rationale"
+
     checks.check("search space is well formed", space_is_well_formed)
 
     def model_params_exist() -> None:
@@ -240,13 +257,13 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
                 "root with the package installed (pip install -e .)"
             ) from exc
         fields = {f.name for f in dataclasses.fields(ModelConfig)}
-        wanted = {p.path.split(".", 1)[1] for p in SEARCH_SPACE
-                  if p.path.startswith("model.")}
+        wanted = {p.path.split(".", 1)[1] for p in SEARCH_SPACE if p.path.startswith("model.")}
         missing = sorted(wanted - fields)
         assert not missing, (
             f"ModelConfig has no field(s) {missing}. These would be sampled "
             f"every trial and silently ignored. Available: {sorted(fields)}"
         )
+
     checks.check("every model.* parameter exists on ModelConfig", model_params_exist)
 
     def startup_points_valid() -> None:
@@ -262,25 +279,34 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
                     assert v in p.choices, f"startup {i}: {p.name}={v} not in choices"
                 else:
                     assert p.low <= v <= p.high, f"startup {i}: {p.name}={v} out of range"
+
     checks.check("startup points are inside the search space", startup_points_valid)
 
     def overrides_nest_correctly() -> None:
-        ov = params_to_overrides({p.name: (p.choices[0] if p.kind == "categorical"
-                                           else p.low) for p in SEARCH_SPACE})
+        ov = params_to_overrides(
+            {p.name: (p.choices[0] if p.kind == "categorical" else p.low) for p in SEARCH_SPACE}
+        )
         assert "train" in ov and "model" in ov and "loader" in ov, ov
         assert ov["train"]["lr"] == 3e-4, ov["train"]
         assert ov["loader"]["max_epochs_per_recording"] == 10, ov["loader"]
         nested: dict[str, Any] = {}
         set_by_path(nested, "a.b.c", 1)
         assert nested == {"a": {"b": {"c": 1}}}
+
     checks.check("parameters map to the right nested config paths", overrides_nest_correctly)
 
     # --- 2. sampling and bounds -----------------------------------------
     def sampling_respects_bounds() -> None:
         study = make_study(None, "bounds", 0, 5, "none", 4)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "bounds", "recording_pauc_sens",
-            fake_train_factory()), n_trials=25)
+        study.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "bounds",
+                "recording_pauc_sens",
+                fake_train_factory(),
+            ),
+            n_trials=25,
+        )
         for t in study.get_trials(deepcopy=False):
             for p in SEARCH_SPACE:
                 v = t.params[p.name]
@@ -290,29 +316,43 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
                     assert p.low <= v <= p.high, f"{p.name}={v} outside [{p.low},{p.high}]"
                 if p.kind == "int":
                     assert float(v).is_integer(), f"{p.name}={v} not an integer"
+
     checks.check("sampled values stay inside every declared range", sampling_respects_bounds)
 
     def pos_weight_never_below_one() -> None:
         study = make_study(None, "posw", 1, 5, "none", 4)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "posw", "recording_pauc_sens",
-            fake_train_factory()), n_trials=20)
+        study.optimize(
+            make_objective(
+                "unused.yaml", tmp / "posw", "recording_pauc_sens", fake_train_factory()
+            ),
+            n_trials=20,
+        )
         lows = [t.params["pos_weight"] for t in study.get_trials(deepcopy=False)]
         assert min(lows) >= 1.0, f"pos_weight sampled below 1.0: {min(lows)}"
-    checks.check("pos_weight is never sampled below 1.0 (sensitivity guard)",
-                 pos_weight_never_below_one)
+
+    checks.check(
+        "pos_weight is never sampled below 1.0 (sensitivity guard)",
+        pos_weight_never_below_one,
+    )
 
     # --- 3. pruning -------------------------------------------------------
     def pruner_prunes() -> None:
         study = make_study(None, "prune", 2, 4, "median", 3)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "prune", "recording_pauc_sens",
-            fake_train_factory()), n_trials=30)
+        study.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "prune",
+                "recording_pauc_sens",
+                fake_train_factory(),
+            ),
+            n_trials=30,
+        )
         states = [t.state for t in study.get_trials(deepcopy=False)]
         n_pruned = sum(s == TrialState.PRUNED for s in states)
         n_done = sum(s == TrialState.COMPLETE for s in states)
         assert n_pruned > 0, "pruner never fired: the budget will not stretch"
         assert n_done > 0, "pruner killed everything: warmup is too aggressive"
+
     checks.check("pruner kills some trials but not all", pruner_prunes)
 
     def warmup_is_respected() -> None:
@@ -331,39 +371,56 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
                 except optuna.TrialPruned:
                     seen.append(count["n"])
                     raise
+
             kw["on_check"] = wrapped
             return base(*a, **kw)
 
         study = make_study(None, "warm", 3, 4, "median", 6)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "warm", "recording_pauc_sens",
-            recording_train), n_trials=30)
+        study.optimize(
+            make_objective("unused.yaml", tmp / "warm", "recording_pauc_sens", recording_train),
+            n_trials=30,
+        )
         if seen:
             assert min(seen) >= 6, f"pruned at check {min(seen)}, before warmup 6"
+
     checks.check("no trial is pruned before its warmup checks", warmup_is_respected)
 
     # --- 4. persistence and resume ---------------------------------------
     def storage_persists() -> None:
         study = make_study(db, "resume-test", 4, 5, "none", 4)
         enqueue_startup(study)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "resume", "recording_pauc_sens",
-            fake_train_factory()), n_trials=8)
+        study.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "resume",
+                "recording_pauc_sens",
+                fake_train_factory(),
+            ),
+            n_trials=8,
+        )
         assert (tmp / "study.db").exists(), "no SQLite file written"
         del study
         reopened = make_study(db, "resume-test", 4, 5, "none", 4)
         n = len(reopened.get_trials(deepcopy=False))
         assert n >= 8, f"resumed study has {n} trials, expected >= 8"
-        reopened.optimize(make_objective(
-            "unused.yaml", tmp / "resume", "recording_pauc_sens",
-            fake_train_factory()), n_trials=3)
+        reopened.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "resume",
+                "recording_pauc_sens",
+                fake_train_factory(),
+            ),
+            n_trials=3,
+        )
         assert len(reopened.get_trials(deepcopy=False)) >= n + 3, "resume added no trials"
+
     checks.check("study survives process death and resumes", storage_persists)
 
     def startup_not_repeated_on_resume() -> None:
         study = make_study(db, "resume-test", 4, 5, "none", 4)
         added = enqueue_startup(study)
         assert added == 0, f"re-enqueued {added} startup point(s) already run"
+
     checks.check("resume does not re-run the startup points", startup_not_repeated_on_resume)
 
     # --- 5. failure handling ----------------------------------------------
@@ -376,36 +433,48 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
             return bad(*a, **kw) if calls["n"] % 4 == 0 else good(*a, **kw)
 
         study = make_study(None, "flaky", 5, 3, "none", 4)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "flaky", "recording_pauc_sens", flaky), n_trials=12)
-        done = [t for t in study.get_trials(deepcopy=False)
-                if t.state == TrialState.COMPLETE]
+        study.optimize(
+            make_objective("unused.yaml", tmp / "flaky", "recording_pauc_sens", flaky),
+            n_trials=12,
+        )
+        done = [t for t in study.get_trials(deepcopy=False) if t.state == TrialState.COMPLETE]
         assert len(done) == 12, "study aborted on a failing trial"
         penalized = [t for t in done if t.value is not None and t.value <= FAILED_SCORE]
         assert penalized, "failing trials were not penalized"
+
     checks.check("a failing trial is penalized, not fatal", one_bad_trial_does_not_stop_the_study)
 
     def nan_scores_are_handled() -> None:
         study = make_study(None, "nan", 6, 3, "median", 2)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "nan", "recording_pauc_sens",
-            fake_train_factory("nan")), n_trials=6)
+        study.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "nan",
+                "recording_pauc_sens",
+                fake_train_factory("nan"),
+            ),
+            n_trials=6,
+        )
         assert len(study.get_trials(deepcopy=False)) == 6, "NaN scores aborted the study"
+
     checks.check("non-finite scores do not abort the study", nan_scores_are_handled)
 
     # --- 6. the search actually searches ----------------------------------
     def tpe_beats_random() -> None:
         """TPE should find better points than random on a space with an optimum."""
         from optuna.samplers import RandomSampler
-        obj = make_objective("unused.yaml", tmp / "cmp", "recording_pauc_sens",
-                             fake_train_factory())
+
+        obj = make_objective(
+            "unused.yaml", tmp / "cmp", "recording_pauc_sens", fake_train_factory()
+        )
         rnd = optuna.create_study(direction="maximize", sampler=RandomSampler(seed=7))
         rnd.optimize(obj, n_trials=40)
         tpe = make_study(None, "tpe", 7, 10, "none", 4)
         tpe.optimize(obj, n_trials=40)
-        assert tpe.best_value >= rnd.best_value - 1e-9, (
-            f"TPE {tpe.best_value:.4f} did not match random {rnd.best_value:.4f}"
-        )
+        assert (
+            tpe.best_value >= rnd.best_value - 1e-9
+        ), f"TPE {tpe.best_value:.4f} did not match random {rnd.best_value:.4f}"
+
     checks.check("TPE finds at least as good an optimum as random search", tpe_beats_random)
 
     def timeout_stops_cleanly() -> None:
@@ -417,20 +486,29 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
 
         study = make_study(None, "timeout", 8, 3, "none", 4)
         t0 = time.perf_counter()
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "timeout", "recording_pauc_sens", slow_train),
-            n_trials=10_000, timeout=1.0)
+        study.optimize(
+            make_objective("unused.yaml", tmp / "timeout", "recording_pauc_sens", slow_train),
+            n_trials=10_000,
+            timeout=1.0,
+        )
         elapsed = time.perf_counter() - t0
         assert elapsed < 6.0, f"timeout overran: {elapsed:.1f}s"
         assert len(study.get_trials(deepcopy=False)) > 0, "timeout produced no trials"
+
     checks.check("wall-clock timeout stops the study cleanly", timeout_stops_cleanly)
 
     # --- 7. the report the next stage consumes -----------------------------
     def report_exports_topk() -> None:
         study = make_study(None, "report", 9, 5, "none", 4)
-        study.optimize(make_objective(
-            "unused.yaml", tmp / "report", "recording_pauc_sens",
-            fake_train_factory()), n_trials=12)
+        study.optimize(
+            make_objective(
+                "unused.yaml",
+                tmp / "report",
+                "recording_pauc_sens",
+                fake_train_factory(),
+            ),
+            n_trials=12,
+        )
         out = tmp / "report_out"
         report(study, 5, out)
         assert (out / "top_k.json").is_file(), "top_k.json not written"
@@ -444,6 +522,7 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
         csv_head = (out / "trials.csv").read_text().splitlines()[0]
         for p in SEARCH_SPACE:
             assert p.name in csv_head, f"{p.name} missing from trials.csv"
+
     checks.check("top-k export is complete and correctly ranked", report_exports_topk)
 
     if keep:
@@ -486,24 +565,29 @@ def run_gpu(
 
     def config_exists() -> None:
         assert Path(config).is_file(), f"config not found: {config}"
+
     checks.check("base config exists", config_exists)
 
     def extreme_configs_build() -> None:
         """Both corners of the capacity space must construct a real model."""
         from eeg_cnn_lstm.models.model import CNN_LSTM
         from eeg_cnn_lstm.models.train import build_model_config
-        for label, point in (("smallest", STARTUP_TRIALS[3]),
-                             ("largest", STARTUP_TRIALS[1])):
+
+        for label, point in (
+            ("smallest", STARTUP_TRIALS[3]),
+            ("largest", STARTUP_TRIALS[1]),
+        ):
             ov = params_to_overrides(point)
             cfg = build_model_config(ov.get("model"))
             n = CNN_LSTM(cfg).num_parameters()
             assert n > 0, f"{label} config has no parameters"
             print(f"          {label}: {n:,} parameters")
-    checks.check("smallest and largest sampled models both build",
-                 extreme_configs_build)
+
+    checks.check("smallest and largest sampled models both build", extreme_configs_build)
 
     def real_trials_run() -> None:
         from eeg_cnn_lstm.models.train import train as train_fn
+
         hook_calls: list[int] = []
 
         def counting_train(*a: Any, **kw: Any) -> dict[str, Any]:
@@ -513,43 +597,53 @@ def run_gpu(
                 hook_calls.append(check_no)
                 assert math.isfinite(score), f"check {check_no} scored {score}"
                 return hook(check_no, score) if hook else False
+
             kw["on_check"] = wrapped
             return train_fn(*a, **kw)
 
-        base = ({"data": {"train_data_dir": train_data_dir}}
-                if train_data_dir else None)
+        base = {"data": {"train_data_dir": train_data_dir}} if train_data_dir else None
         study = make_study(None, "gpu-smoke", 42, 2, "none", 2)
-        study.optimize(make_objective(
-            config_path=config,
-            out_root=out_dir,
-            objective_metric="recording_pauc_sens",
-            train_fn=counting_train,
-            base_overrides=base,
-            max_steps=max_steps,
-            num_epochs=1,
-        ), n_trials=2)
+        study.optimize(
+            make_objective(
+                config_path=config,
+                out_root=out_dir,
+                objective_metric="recording_pauc_sens",
+                train_fn=counting_train,
+                base_overrides=base,
+                max_steps=max_steps,
+                num_epochs=1,
+            ),
+            n_trials=2,
+        )
 
-        done = [t for t in study.get_trials(deepcopy=False)
-                if t.state == TrialState.COMPLETE]
+        done = [t for t in study.get_trials(deepcopy=False) if t.state == TrialState.COMPLETE]
         assert len(done) == 2, f"only {len(done)}/2 trials completed"
         for t in done:
-            assert t.value is not None and math.isfinite(t.value), \
-                f"trial {t.number} returned {t.value}"
+            assert t.value is not None and math.isfinite(
+                t.value
+            ), f"trial {t.number} returned {t.value}"
             assert t.value > -1.0, f"trial {t.number} failed inside train()"
             assert "n_parameters" in t.user_attrs, "run record did not reach the trial"
             assert "pauc_tpr0.9" in t.user_attrs, "high-sensitivity pAUC not reported"
         assert hook_calls, "the validation hook never fired -- pruning would never work"
-        print(f"          {len(hook_calls)} validation check(s) across 2 trials; "
-              f"scores {done[0].value:.4f}, {done[1].value:.4f}")
+        print(
+            f"          {len(hook_calls)} validation check(s) across 2 trials; "
+            f"scores {done[0].value:.4f}, {done[1].value:.4f}"
+        )
+
     checks.check("two real trials complete with finite scores", real_trials_run)
 
     def objective_metric_is_the_sensitivity_one() -> None:
         from eeg_cnn_lstm.models.train import SELECT_METRICS
+
         assert "recording_pauc_sens" in SELECT_METRICS, "objective metric not registered"
         source, key = SELECT_METRICS["recording_pauc_sens"]
         assert source == "recording" and key == "pauc_tpr0.9", (source, key)
-    checks.check("objective resolves to the high-sensitivity pAUC",
-                 objective_metric_is_the_sensitivity_one)
+
+    checks.check(
+        "objective resolves to the high-sensitivity pAUC",
+        objective_metric_is_the_sensitivity_one,
+    )
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -561,15 +655,15 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Verify the HPO setup before a long run.")
     p.add_argument("--mode", default="offline", choices=["offline", "gpu", "both"])
     p.add_argument("--config", default="configs/step2_earlystop.yaml")
-    p.add_argument("--max-steps", type=int, default=30,
-                   help="Training steps per epoch in gpu mode")
-    p.add_argument("--train-data-dir", default=None,
-                   help="Override data.train_data_dir in gpu mode")
+    p.add_argument("--max-steps", type=int, default=30, help="Training steps per epoch in gpu mode")
+    p.add_argument(
+        "--train-data-dir",
+        default=None,
+        help="Override data.train_data_dir in gpu mode",
+    )
     p.add_argument("--out-dir", default="runs/hpo_verify")
-    p.add_argument("--keep", action="store_true",
-                   help="Keep the offline temporary workspace")
-    p.add_argument("--describe", action="store_true",
-                   help="Print the search space and exit")
+    p.add_argument("--keep", action="store_true", help="Keep the offline temporary workspace")
+    p.add_argument("--describe", action="store_true", help="Print the search space and exit")
     return p.parse_args(argv)
 
 
@@ -600,8 +694,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         run_gpu(checks, args.config, args.max_steps, out, args.train_data_dir)
 
     code = checks.summary()
-    print("\n" + ("Ready to launch the search." if code == 0
-                  else "Do NOT launch the search until these are fixed."))
+    print(
+        "\n"
+        + (
+            "Ready to launch the search."
+            if code == 0
+            else "Do NOT launch the search until these are fixed."
+        )
+    )
     return code
 
 

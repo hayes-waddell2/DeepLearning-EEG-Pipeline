@@ -19,7 +19,7 @@ dataset can be regenerated from the raw EDFs with version-controlled code.
 @par Usage (from repo root; normally via jobs/check_repro.sh):
 @verbatim
 python -m scripts.check_preprocessing_repro --n-files 4
-python -m scripts.check_preprocessing_repro --module eeg_cnn_lstm.preprocessing.preprocessing
+python -m scripts.check_preprocessing_repro --module src.preprocessing.preprocessing
 @endverbatim
 """
 
@@ -39,7 +39,10 @@ RAW_TRAIN = Path("/shared/rc/eeg-cnn-lstm/data/raw-datasets/tuab/v3.0.1/edf/trai
 CONVERTED = Path("/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train")
 
 ## @brief Where preprocessing.py may live; the first importable one is used.
-CANDIDATE_MODULES = ["eeg_cnn_lstm.preprocessing.preprocessing"]
+CANDIDATE_MODULES = [
+    "src.eeg_cnn_lstm.preprocessing.preprocessing",
+    "src.preprocessing.preprocessing",
+]
 
 
 def import_preprocessing(name: str | None):
@@ -59,8 +62,11 @@ def import_preprocessing(name: str | None):
             return mod
         except ImportError as exc:
             errors.append(f"{n}: {exc}")
-    raise ImportError("Could not import preprocessing module:\n  " + "\n  ".join(errors)
-                      + "\nPass --module <dotted.path> explicitly.")
+    raise ImportError(
+        "Could not import preprocessing module:\n  "
+        + "\n  ".join(errors)
+        + "\nPass --module <dotted.path> explicitly."
+    )
 
 
 def run_pipeline(pp, edf_file: Path, out_dir: Path) -> dict:
@@ -162,15 +168,21 @@ def main() -> int:
     for r in results:
         status = "PASS" if r["passed"] else "FAIL"
         detail = (
-            "bit-identical" if r.get("exact_match")
+            "bit-identical"
+            if r.get("exact_match")
             else f"max diff {r.get('max_abs_diff_uv', float('nan')):.4f} uV, "
-                 f"{r.get('n_values_differing', '?')} values differ"
+            f"{r.get('n_values_differing', '?')} values differ"
         )
-        print(f"{status}  {r['filename']}  label={r['label']}  "
-              f"epochs={r['n_epochs']} (manifest {r['manifest_n_epochs']})  "
-              f"dtype={r['new_dtype']}  {detail}")
+        print(
+            f"{status}  {r['filename']}  label={r['label']}  "
+            f"epochs={r['n_epochs']} (manifest {r['manifest_n_epochs']})  "
+            f"dtype={r['new_dtype']}  {detail}"
+        )
     all_passed = all(r["passed"] for r in results)
-    print(f"\nVERDICT: {'PASS - float64 data can be deleted' if all_passed else 'FAIL - keep float64 data'}")
+    print(
+        "\nVERDICT: "
+        + ("PASS - float64 data can be deleted" if all_passed else "FAIL - keep float64 data")
+    )
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
