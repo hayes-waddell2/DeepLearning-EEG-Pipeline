@@ -1,0 +1,38 @@
+data:
+  splits_csv: /shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
+eval:
+  run_final_eval: false
+loader:
+  batch_size: 64
+  max_epochs_per_recording: null
+  normalize: zscore
+  num_workers: 8
+  seed: 42
+  val_frac: 0.2
+train:
+  aggregator: mean
+  amp_dtype: fp16
+  device: cuda
+  grad_clip: 1.0
+  lr: 0.001
+  num_epochs: 20
+  output_dir: runs/step2-earlystop
+  select_metric: recording_pauc
+  use_amp: true
+  weight_decay: 0.0001
+  early_stopping:
+    enabled: true
+    val_every_frac: 0.25
+    patience: 12
+    min_delta: 0.002
+    min_checks: 0
+    restore_best: true
+  lr_schedule:
+    enabled: true
+    kind: plateau
+    factor: 0.5
+    patience: 4
+    min_lr: 1.0e-06
+    cooldown: 0

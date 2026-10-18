@@ -227,8 +227,7 @@ def apply_common_average_montage(raw):
 # @return mne.Epochs Fixed-length epochs object.
 def segment_raw(raw, window_sec=10.0, overlap_sec=5.0):
     print(
-        f"Segmenting raw data into {window_sec}-second epochs"
-        f"with {overlap_sec}-second overlap"
+        f"Segmenting raw data into {window_sec}-second epochs" f"with {overlap_sec}-second overlap"
     )
     epochs = mne.make_fixed_length_epochs(
         raw,
@@ -313,9 +312,7 @@ def parse_args():
         default=None,
         help="Path to .edf file or directory (overrides config)",
     )
-    parser.add_argument(
-        "--output", default=None, help="Output directory (overrides config)"
-    )
+    parser.add_argument("--output", default=None, help="Output directory (overrides config)")
     return parser.parse_args()
 
 
@@ -337,9 +334,7 @@ def main():
 
     # Use CLI args if provided, otherwise fall back to config.yaml
     input_path = Path(args.input if args.input else config["data"]["raw_data_path"])
-    output_path = Path(
-        args.output if args.output else config["data"]["processed_data_path"]
-    )
+    output_path = Path(args.output if args.output else config["data"]["processed_data_path"])
     output_path.mkdir(parents=True, exist_ok=True)
 
     split = "train" if "train" in input_path.parts else "eval"
@@ -370,9 +365,7 @@ def main():
 
     manifest_path = output_path / f"{split}_manifest.csv"
     with open(manifest_path, "w", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["filename", "label", "n_epochs", "sfreq"]
-        )
+        writer = csv.DictWriter(f, fieldnames=["filename", "label", "n_epochs", "sfreq"])
         writer.writeheader()
         writer.writerows(manifest_rows)
     print(f"Saved manifest to {manifest_path}")

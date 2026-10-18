@@ -1,0 +1,35 @@
+# configs/baseline_uvscale.yaml
+# A/B arm B: fixed microvolt normalization. Identical to baseline.yaml except
+# for the three loader.normalize* keys and output_dir, so the comparison
+# isolates the normalization choice.
+# Stats from scripts/compute_norm_stats.py (estimated on pool T only).
+
+data:
+  train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
+  train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
+  splits_csv: /shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv
+
+loader:
+  batch_size: 64
+  val_frac: 0.2
+  max_epochs_per_recording: null
+  num_workers: 8
+  normalize: uv_scale
+  norm_stats: configs/norm_stats_tuab.json
+  clip_uv: 800.0
+  seed: 42
+
+train:
+  num_epochs: 5
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  grad_clip: 1.0
+  use_amp: true
+  amp_dtype: fp16
+  device: cuda
+  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_uvscale
+  select_metric: recording_pauc
+  aggregator: mean            # swept post-hoc from predictions_tune.npz
+
+eval:
+  run_final_eval: false
