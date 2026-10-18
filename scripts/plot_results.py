@@ -200,41 +200,75 @@ def fig_training_curves(runs: dict[str, dict[str, Any]], out: Path) -> None:
         if not xs:
             continue
         dense = len(xs) > 14  # hide per-point markers on a long sub-epoch curve
-        ax.plot(xs, vals, color=SERIES[i], linewidth=2,
-                marker="" if dense else "o", markersize=6,
-                markeredgecolor=SURFACE, markeredgewidth=1.5, label=name, zorder=3)
+        ax.plot(
+            xs,
+            vals,
+            color=SERIES[i],
+            linewidth=2,
+            marker="" if dense else "o",
+            markersize=6,
+            markeredgecolor=SURFACE,
+            markeredgewidth=1.5,
+            label=name,
+            zorder=3,
+        )
 
         b = int(np.nanargmax(vals))
-        ax.scatter([xs[b]], [vals[b]], s=170, facecolor="none",
-                   edgecolor=SERIES[i], linewidth=2, zorder=4)
-        notes.append((xs[b], vals[b], f"best {vals[b]:.3f} @ epoch {xs[b]:g}",
-                      SERIES[i], i))
+        ax.scatter(
+            [xs[b]], [vals[b]], s=170, facecolor="none", edgecolor=SERIES[i], linewidth=2, zorder=4
+        )
+        notes.append((xs[b], vals[b], f"best {vals[b]:.3f} @ epoch {xs[b]:g}", SERIES[i], i))
 
         # Learning-rate reductions, as a tick on the line.
         for d in lr_drop_points(bench):
             j = int(np.argmin(np.abs(np.asarray(xs) - d)))
-            ax.plot([d], [vals[j]], marker="|", markersize=13, color=SERIES[i],
-                    markeredgewidth=2, zorder=5)
+            ax.plot(
+                [d],
+                [vals[j]],
+                marker="|",
+                markersize=13,
+                color=SERIES[i],
+                markeredgewidth=2,
+                zorder=5,
+            )
 
         stop = bench.get("stopping") or {}
         if stop.get("stopped_early"):
-            ax.scatter([xs[-1]], [vals[-1]], s=55, marker="s", color=SERIES[i],
-                       edgecolor=SURFACE, linewidth=1.2, zorder=5)
+            ax.scatter(
+                [xs[-1]],
+                [vals[-1]],
+                s=55,
+                marker="s",
+                color=SERIES[i],
+                edgecolor=SURFACE,
+                linewidth=1.2,
+                zorder=5,
+            )
             saved = int(stop.get("epoch_budget", 0)) - int(stop.get("epochs_run", 0))
-            notes.append((xs[-1], vals[-1],
-                          f"stopped early, {saved} epochs saved", SERIES[i], i + 2))
+            notes.append(
+                (xs[-1], vals[-1], f"stopped early, {saved} epochs saved", SERIES[i], i + 2)
+            )
 
     # Annotations flip to right-alignment in the right third of the plot so
     # nothing runs off the canvas; vertical slots keep them from colliding.
     for x, y, text, color, slot in notes:
         right = x > 0.66 * x_max
-        ax.annotate(text, (x, y), textcoords="offset points",
-                    xytext=(-10 if right else 10, (12, -22, -22, -34)[slot % 4]),
-                    ha="right" if right else "left",
-                    color=color, fontsize=9.5)
+        ax.annotate(
+            text,
+            (x, y),
+            textcoords="offset points",
+            xytext=(-10 if right else 10, (12, -22, -22, -34)[slot % 4]),
+            ha="right" if right else "left",
+            color=color,
+            fontsize=9.5,
+        )
 
-    style_axes(ax, "Epoch", "Recording-level partial AUC (FPR ≤ 0.10)",
-               "Tuning-set performance peaks early, then degrades")
+    style_axes(
+        ax,
+        "Epoch",
+        "Recording-level partial AUC (FPR ≤ 0.10)",
+        "Tuning-set performance peaks early, then degrades",
+    )
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax.margins(x=0.06, y=0.14)
     ax.legend(frameon=False, fontsize=9.5, labelcolor=INK_2, loc="lower left")
@@ -261,19 +295,55 @@ def fig_loss_curves(runs: dict[str, dict[str, Any]], out: Path) -> None:
             continue
         dense = len(eps) > 14
         mk = "" if dense else "o"
-        ax.plot(eps, tr, color=SERIES[0], linewidth=2, marker=mk, markersize=6,
-                markeredgecolor=SURFACE, markeredgewidth=1.2, label="train")
-        ax.plot(eps, va, color=SERIES[1], linewidth=2,
-                marker="" if dense else "s", markersize=6,
-                markeredgecolor=SURFACE, markeredgewidth=1.2, label="tuning set")
-        ax.annotate("train", (eps[-1], tr[-1]), textcoords="offset points",
-                    xytext=(-6, -14), color=SERIES[0], fontsize=9, ha="right")
-        ax.annotate("tuning", (eps[-1], va[-1]), textcoords="offset points",
-                    xytext=(-6, 8), color=SERIES[1], fontsize=9, ha="right")
+        ax.plot(
+            eps,
+            tr,
+            color=SERIES[0],
+            linewidth=2,
+            marker=mk,
+            markersize=6,
+            markeredgecolor=SURFACE,
+            markeredgewidth=1.2,
+            label="train",
+        )
+        ax.plot(
+            eps,
+            va,
+            color=SERIES[1],
+            linewidth=2,
+            marker="" if dense else "s",
+            markersize=6,
+            markeredgecolor=SURFACE,
+            markeredgewidth=1.2,
+            label="tuning set",
+        )
+        ax.annotate(
+            "train",
+            (eps[-1], tr[-1]),
+            textcoords="offset points",
+            xytext=(-6, -14),
+            color=SERIES[0],
+            fontsize=9,
+            ha="right",
+        )
+        ax.annotate(
+            "tuning",
+            (eps[-1], va[-1]),
+            textcoords="offset points",
+            xytext=(-6, 8),
+            color=SERIES[1],
+            fontsize=9,
+            ha="right",
+        )
         style_axes(ax, "Epoch", "Loss" if ax is axes[0] else "", name)
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    fig.suptitle("Training loss falls while tuning loss rises: overfitting",
-                 color=INK, fontsize=12, x=0.01, ha="left")
+    fig.suptitle(
+        "Training loss falls while tuning loss rises: overfitting",
+        color=INK,
+        fontsize=12,
+        x=0.01,
+        ha="left",
+    )
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     fig.savefig(out / "loss_curves.png", facecolor=SURFACE)
     plt.close(fig)
@@ -307,8 +377,7 @@ def fig_segment_vs_recording(runs: dict[str, dict[str, Any]], out: Path) -> None
         ax.bar(x + off, vals, w, color=c, label=lab, zorder=3)
         for xi, v in zip(x + off, vals):
             ax.text(xi, v + 0.006, f"{v:.3f}", ha="center", color=INK, fontsize=10)
-    style_axes(ax, "", "AUC on the tuning set",
-               "Aggregating segments into one score per recording")
+    style_axes(ax, "", "AUC on the tuning set", "Aggregating segments into one score per recording")
     ax.set_xticks(x, names, color=INK_2)
     ax.set_ylim(0.5, 1.0)
     ax.legend(frameon=False, fontsize=9.5, labelcolor=INK_2, loc="lower right")
@@ -331,20 +400,24 @@ def fig_aggregator_sweep(runs: dict[str, dict[str, Any]], out: Path) -> None:
         rows = sweep_aggregators(probs, p["rec_idx"], p["rec_label"].astype(int))
         sweeps[name] = {str(row["aggregator"]): row[PAUC_KEY] for row in rows}
 
-    order = list(sweeps[list(sweeps)[0]])          # ranked by the first arm
+    order = list(sweeps[list(sweeps)[0]])  # ranked by the first arm
     y = np.arange(len(order))[::-1]
     h = 0.36
     fig, ax = new_fig(7.4, 4.6)
     for i, (name, vals) in enumerate(sweeps.items()):
         off = (h / 2 + 0.01) * (1 if i == 0 else -1)
-        ax.barh(y + off, [vals.get(a, np.nan) for a in order], h,
-                color=SERIES[i], label=name, zorder=3)
+        ax.barh(
+            y + off, [vals.get(a, np.nan) for a in order], h, color=SERIES[i], label=name, zorder=3
+        )
     for i, a in enumerate(order):
         v = sweeps[list(sweeps)[0]][a]
-        ax.text(v + 0.004, y[i] + h / 2 + 0.01, f"{v:.3f}", va="center",
-                color=INK, fontsize=9)
-    style_axes(ax, "Recording-level partial AUC (FPR ≤ 0.10)", "",
-               "Mean beats focal aggregators: abnormality looks diffuse")
+        ax.text(v + 0.004, y[i] + h / 2 + 0.01, f"{v:.3f}", va="center", color=INK, fontsize=9)
+    style_axes(
+        ax,
+        "Recording-level partial AUC (FPR ≤ 0.10)",
+        "",
+        "Mean beats focal aggregators: abnormality looks diffuse",
+    )
     ax.set_yticks(y, order, color=INK_2)
     ax.set_xlim(0.6, max(max(v.values()) for v in sweeps.values()) + 0.03)
     ax.legend(frameon=False, fontsize=9.5, labelcolor=INK_2, loc="lower right")
@@ -363,27 +436,41 @@ def fig_roc(runs: dict[str, dict[str, Any]], out: Path, aggregator: str = "mean"
     """
     fig, ax = new_fig(5.6, 5.2)
     ax.axvspan(0, DEFAULT_MAX_FPR, color=GRID, alpha=0.45, zorder=1)
-    ax.text(DEFAULT_MAX_FPR / 2, 0.03, "pAUC region", ha="center",
-            color=INK_2, fontsize=8.5)
+    ax.text(DEFAULT_MAX_FPR / 2, 0.03, "pAUC region", ha="center", color=INK_2, fontsize=8.5)
     ax.plot([0, 1], [0, 1], color=GRID, linewidth=1.2, linestyle=(0, (4, 4)), zorder=2)
 
     for i, (name, r) in enumerate(runs.items()):
         p = r["pred"]
         probs = sigmoid(p["logits"].astype(np.float64))
         labels = p["rec_label"].astype(int)
-        scores = aggregate_to_recordings(probs, p["rec_idx"], aggregator,
-                                         n_recordings=len(labels))
+        scores = aggregate_to_recordings(probs, p["rec_idx"], aggregator, n_recordings=len(labels))
         fpr, tpr, _ = roc_curve(labels, scores)
         ax.plot(fpr, tpr, color=SERIES[i], linewidth=2, label=name, zorder=3)
         spec, _ = specificity_at_sensitivity(labels, scores, DEFAULT_SENS_FLOOR)
         if np.isfinite(spec):
-            ax.scatter([1 - spec], [DEFAULT_SENS_FLOOR], s=90, color=SERIES[i],
-                       edgecolor=SURFACE, linewidth=1.5, zorder=4)
-            ax.annotate(f"{name}: spec {spec:.2f} @ sens 0.95",
-                        (1 - spec, DEFAULT_SENS_FLOOR), textcoords="offset points",
-                        xytext=(8, -4 - 14 * i), color=SERIES[i], fontsize=9)
-    style_axes(ax, "False positive rate (1 − specificity)", "Sensitivity",
-               "Recording-level ROC on the tuning set")
+            ax.scatter(
+                [1 - spec],
+                [DEFAULT_SENS_FLOOR],
+                s=90,
+                color=SERIES[i],
+                edgecolor=SURFACE,
+                linewidth=1.5,
+                zorder=4,
+            )
+            ax.annotate(
+                f"{name}: spec {spec:.2f} @ sens 0.95",
+                (1 - spec, DEFAULT_SENS_FLOOR),
+                textcoords="offset points",
+                xytext=(8, -4 - 14 * i),
+                color=SERIES[i],
+                fontsize=9,
+            )
+    style_axes(
+        ax,
+        "False positive rate (1 − specificity)",
+        "Sensitivity",
+        "Recording-level ROC on the tuning set",
+    )
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1.02)
     ax.legend(frameon=False, fontsize=9.5, labelcolor=INK_2, loc="lower right")

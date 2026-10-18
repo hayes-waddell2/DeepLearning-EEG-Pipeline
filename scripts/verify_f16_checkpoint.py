@@ -81,9 +81,7 @@ def main() -> int:
     parser.add_argument("--config", default="configs/baseline.yaml")
     parser.add_argument("--old-data-dir", required=True)
     parser.add_argument("--new-data-dir", required=True)
-    parser.add_argument(
-        "--checkpoint", default="/shared/rc/eeg-cnn-lstm/runs/baseline_v1/best.pt"
-    )
+    parser.add_argument("--checkpoint", default="/shared/rc/eeg-cnn-lstm/runs/baseline_v1/best.pt")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--num-workers", type=int, default=8)
     parser.add_argument("--n-numeric-samples", type=int, default=500)
@@ -99,8 +97,12 @@ def main() -> int:
     manifest = load_manifest(cfg["data"]["train_manifest"])
     _, val_df = build_subject_disjoint_split(manifest, val_frac=val_frac, seed=seed)
     # Baseline used seed + 1 and no subsampling for the val set.
-    ds_old = TUABEpochDataset(val_df, args.old_data_dir, max_epochs_per_recording=None, seed=seed + 1)
-    ds_new = TUABEpochDataset(val_df, args.new_data_dir, max_epochs_per_recording=None, seed=seed + 1)
+    ds_old = TUABEpochDataset(
+        val_df, args.old_data_dir, max_epochs_per_recording=None, seed=seed + 1
+    )
+    ds_new = TUABEpochDataset(
+        val_df, args.new_data_dir, max_epochs_per_recording=None, seed=seed + 1
+    )
     assert len(ds_old) == len(ds_new), "Datasets differ in length"
     print(f"Validation fold: {len(val_df)} recordings, {len(ds_old):,} segments")
 
@@ -165,9 +167,15 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(
         json.dumps(
-            {"numerical": numeric, "functional": functional, "passed": passed,
-             "auc_tolerance": AUC_TOLERANCE, "checkpoint": args.checkpoint,
-             "old_data_dir": args.old_data_dir, "new_data_dir": args.new_data_dir},
+            {
+                "numerical": numeric,
+                "functional": functional,
+                "passed": passed,
+                "auc_tolerance": AUC_TOLERANCE,
+                "checkpoint": args.checkpoint,
+                "old_data_dir": args.old_data_dir,
+                "new_data_dir": args.new_data_dir,
+            },
             indent=2,
         )
     )

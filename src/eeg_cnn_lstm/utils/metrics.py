@@ -72,8 +72,7 @@ def compute_metrics(
     """
     if logits.shape[0] != labels.shape[0]:
         raise ValueError(
-            f"Length mismatch: logits {tuple(logits.shape)} "
-            f"vs labels {tuple(labels.shape)}"
+            f"Length mismatch: logits {tuple(logits.shape)} " f"vs labels {tuple(labels.shape)}"
         )
 
     logits_np = logits.detach().cpu().numpy().ravel()
@@ -143,6 +142,11 @@ DEFAULT_SPEC_FLOOR: float = 0.90
 
 ## @brief Default sensitivity floor for the triage operating point.
 DEFAULT_SENS_FLOOR: float = 0.95
+
+## @brief Sensitivity floor defining the high-sensitivity partial-AUC region.
+#  Deliberately below DEFAULT_SENS_FLOOR so the region has width around the
+#  operating point instead of collapsing onto a single threshold.
+DEFAULT_MIN_TPR: float = 0.90
 
 
 def sigmoid(logits: np.ndarray) -> np.ndarray:
@@ -255,9 +259,7 @@ def aggregate_to_recordings(
     return out
 
 
-def partial_auc(
-    labels: np.ndarray, scores: np.ndarray, max_fpr: float = DEFAULT_MAX_FPR
-) -> float:
+def partial_auc(labels: np.ndarray, scores: np.ndarray, max_fpr: float = DEFAULT_MAX_FPR) -> float:
     """
     @brief Standardized partial AUC over FPR in [0, `max_fpr`].
 
@@ -276,6 +278,52 @@ def partial_auc(
     if len(np.unique(labels)) < 2:
         return float("nan")
     return float(roc_auc_score(labels, scores, max_fpr=max_fpr))
+
+
+def partial_auc_high_sens(
+    labels: np.ndarray, scores: np.ndarray, min_tpr: float = DEFAULT_MIN_TPR
+) -> float:
+    """
+    @brief Standardized partial AUC over the high-sensitivity region, TPR >= `min_tpr`.
+
+    @details
+    `partial_auc` measures the ROC where FPR is small -- the few-false-alarms
+    corner. That is the wrong corner for this project. The triage operating
+    point is "catch at least 95% of abnormal recordings", which on the measured
+    model sits at a specificity of ~0.54, i.e. an FPR near 0.46. Optimizing
+    FPR <= 0.10 tunes a part of the curve the deployed system never visits.
+
+    This measures the region the operating point does live in, while staying an
+    area statistic: `specificity_at_sensitivity` is a single-threshold number
+    and therefore much noisier, which matters when the check-to-check standard
+    deviation is already ~0.02.
+
+    Implementation: the ROC of `(1 - labels, -scores)` is the original curve
+    with its axes swapped, since the flipped true-positive rate is the original
+    specificity and the flipped false-positive rate is the original miss rate.
+    So the flipped region `FPR <= 1 - min_tpr` is exactly the original region
+    `TPR >= min_tpr`, and sklearn's McClish standardization applies unchanged:
+    0.5 is chance, 1.0 is perfect.
+
+    @param labels Binary labels (0/1).
+    @param scores Higher means more likely positive.
+    @param min_tpr Sensitivity floor defining the region, in [0, 1).
+    @return Standardized partial AUC over `TPR >= min_tpr`, or `NaN` if only
+            one class is present.
+    @throws ValueError If `min_tpr` is outside [0, 1).
+    """
+    if not 0.0 <= min_tpr < 1.0:
+        raise ValueError(f"min_tpr must be in [0, 1); got {min_tpr}")
+    labels = np.asarray(labels)
+    if len(np.unique(labels)) < 2:
+        return float("nan")
+    return float(
+        roc_auc_score(
+            1 - labels.astype(int),
+            -np.asarray(scores, dtype=float),
+            max_fpr=1.0 - min_tpr,
+        )
+    )
 
 
 def sensitivity_at_specificity(
@@ -382,6 +430,7 @@ def recording_metrics(
     max_fpr: float = DEFAULT_MAX_FPR,
     spec_floor: float = DEFAULT_SPEC_FLOOR,
     sens_floor: float = DEFAULT_SENS_FLOOR,
+    min_tpr: float = DEFAULT_MIN_TPR,
 ) -> dict[str, float | int]:
     """
     @brief Full recording-level metric set: threshold-free plus one operating point.
@@ -391,9 +440,10 @@ def recording_metrics(
     @param threshold Operating point to report. If `None`, uses the threshold
            that achieves `sens_floor` (falling back to Youden's J when that is
            unreachable).
-    @param max_fpr FPR ceiling for partial AUC.
+    @param max_fpr FPR ceiling for partial AUC (low-false-alarm region).
     @param spec_floor Specificity floor for `sens_at_spec`.
     @param sens_floor Sensitivity floor for `spec_at_sens`.
+    @param min_tpr Sensitivity floor for the high-sensitivity partial AUC.
     @return Dict of metrics, including `n_recordings` and `n_pos`/`n_neg`.
     """
     keep = ~np.isnan(scores)
@@ -410,6 +460,10 @@ def recording_metrics(
 
     out["auc_roc"] = float(roc_auc_score(labels, scores))
     out[f"pauc_fpr{max_fpr:g}"] = partial_auc(labels, scores, max_fpr)
+    # Both ROC regions are always reported: the low-FPR one for continuity with
+    # the Step 1 and Step 2 results, and the high-sensitivity one because that
+    # is where the triage operating point actually sits.
+    out[f"pauc_tpr{min_tpr:g}"] = partial_auc_high_sens(labels, scores, min_tpr)
     sens, _ = sensitivity_at_specificity(labels, scores, spec_floor)
     spec, thr_sens = specificity_at_sensitivity(labels, scores, sens_floor)
     out[f"sens_at_spec{spec_floor:g}"] = sens
@@ -536,9 +590,7 @@ def sweep_aggregators(
     return rows
 
 
-def format_recording_metrics(
-    metrics: Mapping[str, float | int], prefix: str = ""
-) -> str:
+def format_recording_metrics(metrics: Mapping[str, float | int], prefix: str = "") -> str:
     """
     @brief One-line summary of a recording-level metric dict, for logs.
 
@@ -548,12 +600,8 @@ def format_recording_metrics(
     """
     p = f"{prefix} " if prefix else ""
     pauc = next((v for k, v in metrics.items() if k.startswith("pauc")), float("nan"))
-    sens_spec = next(
-        (v for k, v in metrics.items() if k.startswith("sens_at_spec")), float("nan")
-    )
-    spec_sens = next(
-        (v for k, v in metrics.items() if k.startswith("spec_at_sens")), float("nan")
-    )
+    sens_spec = next((v for k, v in metrics.items() if k.startswith("sens_at_spec")), float("nan"))
+    spec_sens = next((v for k, v in metrics.items() if k.startswith("spec_at_sens")), float("nan"))
     return (
         f"{p}n={metrics.get('n_recordings', 0)}  "
         f"auc={metrics.get('auc_roc', float('nan')):.4f}  "
@@ -603,7 +651,9 @@ def _main() -> None:
     seg = compute_metrics(logits, torch.tensor(seg_labels, dtype=torch.float32))
     print("segment level:", format_metrics(seg, prefix="seg"))
 
-    print(f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} {'sens@spec.9':>12} {'spec@sens.95':>13}")
+    print(
+        f"\n{'aggregator':>16} {'auc':>7} {'pauc':>7} " f"{'sens@spec.9':>12} {'spec@sens.95':>13}"
+    )
     for row in sweep_aggregators(probs, rec_idx, rec_labels):
         print(
             f"{row['aggregator']:>16} {row['auc_roc']:>7.4f} "

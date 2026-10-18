@@ -46,9 +46,7 @@ import pandas as pd
 from eeg_cnn_lstm.preprocessing.preprocessing import STANDARD_1020_CHANNELS
 
 DEFAULT_SPLITS = Path("/shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv")
-DEFAULT_DATA_DIR = Path(
-    "/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train"
-)
+DEFAULT_DATA_DIR = Path("/shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train")
 DEFAULT_OUT = Path("configs/norm_stats_tuab.json")
 
 
@@ -93,8 +91,8 @@ def main() -> int:
     rng = np.random.default_rng(args.seed)
     ch_sum = np.zeros(n_ch, dtype=np.float64)
     ch_sumsq = np.zeros(n_ch, dtype=np.float64)
-    n_values = 0            # per channel
-    n_clipped = 0           # values hitting the clip threshold
+    n_values = 0  # per channel
+    n_clipped = 0  # values hitting the clip threshold
     n_segments = 0
     n_recordings = 0
     abs_max = 0.0
@@ -109,7 +107,7 @@ def main() -> int:
         n = arr.shape[0]
         k = min(args.segments_per_recording, n)
         idx = np.sort(rng.choice(n, size=k, replace=False))
-        x = np.asarray(arr[idx], dtype=np.float64)          # (k, 19, 2500), uV
+        x = np.asarray(arr[idx], dtype=np.float64)  # (k, 19, 2500), uV
 
         abs_max = max(abs_max, float(np.abs(x).max()))
         n_clipped += int((np.abs(x) > args.clip_uv).sum())
@@ -162,8 +160,10 @@ def main() -> int:
 
     print(f"\nWrote {args.out}")
     print(f"  segments used: {n_segments:,} from {n_recordings} recordings")
-    print(f"  clip: +/-{args.clip_uv} uV; max seen {abs_max:,.0f} uV; "
-          f"clipped {stats['clipped_value_fraction']:.6%} of values")
+    print(
+        f"  clip: +/-{args.clip_uv} uV; max seen {abs_max:,.0f} uV; "
+        f"clipped {stats['clipped_value_fraction']:.6%} of values"
+    )
     print(f"  global std: {global_std:.2f} uV\n")
     print(f"{'channel':>8} {'mean_uV':>9} {'std_uV':>8}")
     for c, m, s in zip(STANDARD_1020_CHANNELS, mean, std):

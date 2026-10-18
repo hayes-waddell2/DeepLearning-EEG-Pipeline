@@ -152,9 +152,7 @@ def pool_frame(splits: pd.DataFrame, pool: str) -> pd.DataFrame:
     return splits[splits["pool"] == pool].reset_index(drop=True)
 
 
-def fold_frames(
-    splits: pd.DataFrame, fold: int
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+def fold_frames(splits: pd.DataFrame, fold: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     @brief Training and test frames for one cross-validation fold.
 
@@ -307,9 +305,7 @@ def make_split_loaders(
     info: dict[str, Any] = {
         "fold": fold,
         "normalize": normalize,
-        "splits_sha256": (
-            None if isinstance(splits, pd.DataFrame) else splits_sha256(splits)
-        ),
+        "splits_sha256": (None if isinstance(splits, pd.DataFrame) else splits_sha256(splits)),
         "train": train_set.describe(),
         "tune": tune_set.describe(),
         "test": test_set.describe() if test_set is not None else None,

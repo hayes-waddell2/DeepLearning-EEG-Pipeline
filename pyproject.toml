@@ -19,11 +19,12 @@ dependencies = [
     "loguru",
     "scikit-learn",
     "pyyaml",
+    "optuna"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "black>=24.0",
+    "black==26.10.1",
     "flake8",
     "pytest",
     "pyedflib",
@@ -45,5 +46,5 @@ git_describe_command = "git describe --dirty --tags --long --match v*"
 testpaths = ["tests"]
 
 [tool.black]
-line-length = 88
+line-length = 100
 target-version = ["py311", "py312"]

@@ -256,9 +256,7 @@ def build_scheduler(
 
     kind = str(cfg.get("kind", "plateau")).lower()
     if kind not in SCHEDULER_KINDS:
-        raise ValueError(
-            f"lr_schedule.kind must be one of {SCHEDULER_KINDS}; got {kind!r}"
-        )
+        raise ValueError(f"lr_schedule.kind must be one of {SCHEDULER_KINDS}; got {kind!r}")
     if kind == "none":
         return None
     if mode not in MODES:

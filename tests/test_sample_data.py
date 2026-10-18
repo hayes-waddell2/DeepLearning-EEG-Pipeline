@@ -67,8 +67,7 @@ def load_raw(edf_path):
 # Fails with a descriptive message if scripts/create_sample_data.py has not been run.
 def test_sample_data_root_exists():
     assert SAMPLE_DATA_DIR.exists(), (
-        "Sample data not found. Generate it first:\n"
-        "  python scripts/create_sample_data.py"
+        "Sample data not found. Generate it first:\n" "  python scripts/create_sample_data.py"
     )
 
 
@@ -208,12 +207,8 @@ def test_full_pipeline_produces_valid_epochs(tmp_path):
     assert len(epochs) > 0, "Pipeline produced zero epochs."
 
     _, n_channels, n_times = epochs.get_data().shape
-    assert (
-        n_channels == 19
-    ), f"Expected 19 channels after channel selection, got {n_channels}."
-    assert (
-        n_times == 2500
-    ), f"Expected 2500 samples per epoch (10s × 250 Hz), got {n_times}."
+    assert n_channels == 19, f"Expected 19 channels after channel selection, got {n_channels}."
+    assert n_times == 2500, f"Expected 2500 samples per epoch (10s × 250 Hz), got {n_times}."
 
 
 ## Verifies that the channel names after preprocessing match the standard 10-20 set.
@@ -306,6 +301,6 @@ def test_pipeline_saves_valid_npy(tmp_path):
         "segments are stored as float16 microvolts)."
     )
     # uV scale check: volts (~1e-5) would round to ~0 in float16
-    assert np.nanmax(np.abs(saved.astype(np.float32))) > 1.0, (
-         "Values look like volts, not microvolts."
-    )
+    assert (
+        np.nanmax(np.abs(saved.astype(np.float32))) > 1.0
+    ), "Values look like volts, not microvolts."
