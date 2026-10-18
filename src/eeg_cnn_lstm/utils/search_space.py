@@ -49,7 +49,7 @@ there raises at trial setup rather than being silently ignored -- run
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal, Optional, Sequence
 
 ## @brief Parameter groups, used only for reporting how the budget was spent.

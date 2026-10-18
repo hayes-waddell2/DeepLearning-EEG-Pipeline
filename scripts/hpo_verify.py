@@ -45,7 +45,6 @@ import dataclasses
 import json
 import math
 import shutil
-import sys
 import tempfile
 import time
 import traceback
@@ -98,8 +97,8 @@ class Checks:
             self.failed.append((name, detail))
             print(f"{BAD}  {name}\n          {detail}")
             if not isinstance(exc, AssertionError):
-                print("".join("          " + l for l in
-                              traceback.format_exc(limit=3).splitlines(True)))
+                tb = traceback.format_exc(limit=3).splitlines(True)
+                print("".join("          " + line for line in tb))
             return None
         self.passed += 1
         print(f"{OK}  {name}")
@@ -433,7 +432,7 @@ def run_offline(checks: Checks, keep: bool = False) -> None:
             "unused.yaml", tmp / "report", "recording_pauc_sens",
             fake_train_factory()), n_trials=12)
         out = tmp / "report_out"
-        summary = report(study, 5, out)
+        report(study, 5, out)
         assert (out / "top_k.json").is_file(), "top_k.json not written"
         assert (out / "trials.csv").is_file(), "trials.csv not written"
         loaded = json.loads((out / "top_k.json").read_text())

@@ -914,7 +914,10 @@ def train(
         "lr_initial": current_lr(optimizer),
         "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
-        "stage_seconds": float(os.environ["STAGE_SECONDS"]) if os.environ.get("STAGE_SECONDS") else None,
+        "stage_seconds": (
+            float(os.environ["STAGE_SECONDS"])
+            if os.environ.get("STAGE_SECONDS") else None
+        ),
         "split_info": info,
         "epochs": [],
         "checks": [],
@@ -1119,12 +1122,15 @@ def train(
             f"{val_name}_loss={last.get('val_loss', float('nan')):.4f}  "
             f"{format_metrics(last.get('segment_metrics', {}), prefix=f'{val_name}seg')}"
         )
+        val_total_min = (
+            float(t_stats["mid_epoch_eval_seconds"]) + float(last.get("val_seconds") or 0.0)
+        ) / 60
         logger.info(
             f"  timing: train {t_stats['epoch_seconds'] / 60:.1f} min "
             f"({t_stats['samples_per_sec']:,.0f} samples/s, "
             f"data_wait {t_stats['data_wait_frac']:.1%}, "
             f"first batch {t_stats['first_batch_seconds']:.1f}s)  "
-            f"validation {(t_stats['mid_epoch_eval_seconds'] + last.get('val_seconds', 0.0)) / 60:.1f} min"
+            f"validation {val_total_min:.1f} min"
         )
 
         bench["epochs"].append(

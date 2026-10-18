@@ -65,8 +65,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -79,7 +77,6 @@ from optuna.samplers import TPESampler
 from optuna.trial import TrialState
 
 from eeg_cnn_lstm.utils.search_space import (
-    GROUPS,
     SEARCH_SPACE,
     STARTUP_TRIALS,
     describe,
@@ -392,7 +389,8 @@ def report(study: optuna.Study, top_k: int, out_dir: Optional[Path]) -> dict[str
         rows = ["trial,state,score," + ",".join(p.name for p in SEARCH_SPACE)]
         for t in study.get_trials(deepcopy=False):
             vals = ",".join(str(t.params.get(p.name, "")) for p in SEARCH_SPACE)
-            rows.append(f"{t.number},{t.state.name},{t.value if t.value is not None else ''},{vals}")
+            score = t.value if t.value is not None else ""
+            rows.append(f"{t.number},{t.state.name},{score},{vals}")
         (out_dir / "trials.csv").write_text("\n".join(rows) + "\n")
         logger.info(f"\nWrote {out_dir / 'top_k.json'} and {out_dir / 'trials.csv'}")
     return summary
