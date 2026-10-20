@@ -1,12 +1,15 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=eeg-seedval
+#SBATCH --account=eeg-cnn-lstm
 #SBATCH --partition=sporc-gpu
 #SBATCH --gres=gpu:a100:1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=64G
-#SBATCH --time=12:00:00
-#SBATCH --output=logs/seedval-%j.out
-#SBATCH --error=logs/seedval-%j.err
+#SBATCH --output=/shared/rc/eeg-cnn-lstm/runs/slurm_%x_%j.out
+#SBATCH --error=/shared/rc/eeg-cnn-lstm/runs/slurm_%x_%j.err
+#SBATCH --time=0-12:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=9
+#SBATCH --mem=64g
 #
 # Seed validation for the eeg-hpo-v1 top configurations.
 #
@@ -49,7 +52,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "${OUT}" "${LOCAL}" logs
+mkdir -p "${OUT}" "${LOCAL}"
 cd "${REPO_DIR}"
 source .venv/bin/activate
 
