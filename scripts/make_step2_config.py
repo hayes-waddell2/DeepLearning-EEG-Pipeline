@@ -61,6 +61,7 @@ def build(
     min_delta: float,
     factor: float,
     min_lr: float,
+    lr_schedule: bool = False,
 ) -> tuple[dict[str, Any], dict[str, int]]:
     """
     @brief Produce the Step 2 config and the check counts it implies.
@@ -82,6 +83,11 @@ def build(
     @param min_delta Absolute improvement that counts as progress.
     @param factor LR multiplier on plateau.
     @param min_lr Learning-rate floor.
+    @param lr_schedule Enable `ReduceLROnPlateau`. Off by default: measured on
+           this model it fired on validation noise and suppressed a recovery
+           the unscheduled run achieved (pAUC 0.799 vs 0.821 at epoch 4). The
+           block is still written so the setting is explicit in the config
+           rather than implied by its absence.
     @return Tuple `(config, derived)` where `derived` holds the check counts.
     @throws ValueError If the cadence is outside (0, 1].
     """
@@ -109,7 +115,7 @@ def build(
                 "restore_best": True,
             },
             "lr_schedule": {
-                "enabled": True,
+                "enabled": lr_schedule,
                 "kind": "plateau",
                 "factor": factor,
                 "patience": lr_patience,
@@ -139,9 +145,13 @@ def parse_args() -> argparse.Namespace:
         default="configs/baseline.yaml",
         help="Config to inherit data and loader settings from",
     )
-    p.add_argument("--out", default="configs/step2_earlystop.yaml", help="Destination config path")
     p.add_argument(
-        "--output-dir", default="runs/step2-earlystop", help="train.output_dir for the Step 2 run"
+        "--out", default="configs/step2_earlystop.yaml", help="Destination config path"
+    )
+    p.add_argument(
+        "--output-dir",
+        default="runs/step2-earlystop",
+        help="train.output_dir for the Step 2 run",
     )
     p.add_argument(
         "--num-epochs",
@@ -170,15 +180,25 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--min-delta",
         type=float,
-        default=0.002,
+        default=0.01,
         help="Absolute improvement that counts as progress",
     )
     p.add_argument("--factor", type=float, default=0.5, help="LR multiplier on plateau")
     p.add_argument("--min-lr", type=float, default=1e-6, help="LR floor")
     p.add_argument(
-        "--overwrite", action="store_true", help="Replace the destination if it already exists"
+        "--lr-schedule",
+        action="store_true",
+        help="Enable ReduceLROnPlateau. Off by default: it fired on noise and "
+        "cost 0.023 pAUC on the measured run",
     )
-    p.add_argument("--dry-run", action="store_true", help="Print the train block and write nothing")
+    p.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace the destination if it already exists",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="Print the train block and write nothing"
+    )
     return p.parse_args()
 
 
@@ -207,6 +227,7 @@ def main() -> int:
         min_delta=a.min_delta,
         factor=a.factor,
         min_lr=a.min_lr,
+        lr_schedule=a.lr_schedule,
     )
 
     # Inheritance check: anything Step 2 did not deliberately change must be
@@ -221,7 +242,10 @@ def main() -> int:
         if baseline.get(section) != cfg.get(section):
             unexpected.append(section)
     if unexpected:
-        print(f"error: unexpected divergence from the baseline: {unexpected}", file=sys.stderr)
+        print(
+            f"error: unexpected divergence from the baseline: {unexpected}",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"Baseline:      {base_p}")
@@ -233,10 +257,13 @@ def main() -> int:
         f"Stop patience: {derived['stop_patience_checks']} checks "
         f"(= {a.patience_epochs:g} epochs)"
     )
-    print(
-        f"LR patience:   {derived['lr_patience_checks']} checks "
-        f"(= {a.lr_patience_epochs:g} epochs), factor {a.factor:g}"
-    )
+    if a.lr_schedule:
+        print(
+            f"LR schedule:   ON, patience {derived['lr_patience_checks']} checks "
+            f"(= {a.lr_patience_epochs:g} epochs), factor {a.factor:g}"
+        )
+    else:
+        print("LR schedule:   OFF (fired on noise; cost 0.023 pAUC when tested)")
     print(f"Epoch budget:  {a.num_epochs} (upper bound)")
     print("Inherited:     data, loader, eval and all other train keys\n")
     print(yaml.safe_dump({"train": cfg["train"]}, sort_keys=False))
