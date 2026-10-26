@@ -258,9 +258,9 @@ def report(rows: list[dict[str, Any]], out_dir: Optional[Path]) -> dict[str, Any
         lines = [",".join(hdr)]
         for r in rows:
             lines.append(
-                f"{r['name']},{r.get('source_trial','')},{r['n']},"
-                f"{r['mean']:.6f},{r.get('sd',0):.6f},{r.get('spread',0):.6f},"
-                f"{r.get('hpo_score','')}"
+                f"{r['name']},{r.get('source_trial', '')},{r['n']},"
+                f"{r['mean']:.6f},{r.get('sd', 0):.6f},{r.get('spread', 0):.6f},"
+                f"{r.get('hpo_score', '')}"
             )
         (out_dir / "seed_validation.csv").write_text("\n".join(lines) + "\n")
         logger.info(f"\nWrote {out_dir / 'seed_validation.json'} and .csv")
@@ -451,7 +451,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 a.train_data_dir,
                 a.num_epochs,
             )
-            src = f"{c.get('source_state','?')} trial {c.get('source_trial','?')}"
+            src = f"{c.get('source_state', '?')} trial {c.get('source_trial', '?')}"
             logger.info(f"\n{c['name']}  ({src}, hpo {c.get('hpo_score', float('nan')):.4f})")
             logger.info(f"  {json.dumps(ov, default=str)}")
         logger.info(f"\n{'--describe' if a.describe else '--dry-run'}: nothing trained")
