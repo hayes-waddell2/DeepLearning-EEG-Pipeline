@@ -124,6 +124,10 @@ CENTER_LEVEL: dict[str, Any] = {
     "conv_width": 1.0,
 }
 
+## @brief Set once the parameter-count import has failed, so the note is
+#  printed a single time rather than fourteen.
+_COUNT_WARNED = False
+
 ## @brief Seeds for the shape sweep. Shared across every point so comparisons
 #  are blocked: a hard seed is hard everywhere and cancels in the difference.
 SHAPE_SEEDS = [42, 1337, 2024]
@@ -207,27 +211,36 @@ def count_parameters(overrides: dict[str, Any]) -> Optional[int]:
     @details
     Knowing the x-axis coverage before committing GPU hours is the point of
     generating these up front: a sweep whose parameter counts clump the way the
-    search's did would be worth redesigning, not running. Returns `None` when
-    torch or the model package is unavailable, so the generator still works off
-    the cluster.
+    search's did would be worth redesigning, not running.
+
+    The model is built through `build_model_config`, the same entry point the
+    trainer uses, so a field name the real `ModelConfig` does not have is
+    rejected here rather than seven hours into the sweep. That check caught
+    three invalid names before the HPO run; the depth arm, which sets
+    `conv_channels` and `pool_sizes` together, is the obvious candidate to get
+    wrong this time.
+
+    Returns `None` off the cluster, where torch is absent, so the generator
+    still prints its table. Failures are reported rather than swallowed --
+    a silent `None` would hide exactly the mistake this is meant to catch.
 
     @param overrides The point's config override tree.
     @return Trainable parameter count, or `None` if it cannot be computed.
     """
+    global _COUNT_WARNED
     try:
-        from eeg_cnn_lstm.models.model import CNNLSTM, ModelConfig
-    except Exception:  # noqa: BLE001 - absence is expected off the cluster
+        from eeg_cnn_lstm.models.model import CNN_LSTM
+        from eeg_cnn_lstm.models.train import build_model_config
+    except Exception as exc:  # noqa: BLE001 - expected off the cluster
+        if not _COUNT_WARNED:
+            print(f"note: parameter counts unavailable ({exc})", file=sys.stderr)
+            _COUNT_WARNED = True
         return None
     try:
-        fields = {f for f in ModelConfig.__dataclass_fields__}  # type: ignore[attr-defined]
-        kwargs = {k: v for k, v in overrides["model"].items() if k in fields}
-        unknown = set(overrides["model"]) - fields
-        if unknown:
-            raise ValueError(f"ModelConfig has no field(s) {sorted(unknown)}")
-        model = CNNLSTM(ModelConfig(**kwargs))
-        return int(sum(p.numel() for p in model.parameters() if p.requires_grad))
+        model = CNN_LSTM(build_model_config(overrides["model"]))
+        return int(model.num_parameters())
     except Exception as exc:  # noqa: BLE001 - report, do not abort generation
-        print(f"  warning: parameter count failed: {exc}", file=sys.stderr)
+        print(f"  ERROR building this point: {exc}", file=sys.stderr)
         return None
 
 
