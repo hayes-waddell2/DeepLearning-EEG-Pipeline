@@ -1,0 +1,49 @@
+==============================================================================================
+paired.json   block=seed   metric=score   margin=+/-0.01
+==============================================================================================
+
+PER-CONFIGURATION -- score
+  config          n     mean       sd      min      max
+  trial_0061      3   0.7921   0.0032   0.7890   0.7954
+  trial_0061_trimmed  3   0.7921   0.0032   0.7890   0.7954
+
+Pooled within-configuration sd: 0.0032 on 4 df (vs 0.0032 on 2 df for trial_0061 alone)
+
+SEED EFFECT -- mean across configurations
+  seed     42  mean 0.7954  (n=2)
+  seed   1337  mean 0.7890  (n=2)
+  seed   2024  mean 0.7920  (n=2)
+  spread across seeds: 0.0064
+  -> Seeds differ enough to matter. Pairing removes this, which is why the paired comparison below is the right one.
+
+PAIRWISE -- paired differences, equivalence margin +/-0.01
+  A             B                 diff   sd(d)             95% CI        unpaired CI      verdict
+  trial_0061    trial_0061_trimmed  +0.0000  0.0000 [+0.0000,+0.0000] [-0.0073,+0.0073]   equivalent
+
+  DIFFERENT    = the 95% CI on the paired difference excludes zero
+  equivalent   = TOST rejects both one-sided nulls; the pair is
+                 interchangeable within the margin (a positive claim)
+  inconclusive = neither; more repeats would help THIS pair
+
+==============================================================================================
+SECONDARY METRIC -- spec_at_sens0.95 (the deployed operating point)
+==============================================================================================
+
+PER-CONFIGURATION -- spec_at_sens0.95
+  config          n     mean       sd      min      max
+  trial_0061      3   0.6399   0.0147   0.6241   0.6533
+  trial_0061_trimmed  3   0.6399   0.0147   0.6241   0.6533
+
+Pooled sd: 0.0147 on 4 df
+
+PAIRWISE -- paired differences, equivalence margin +/-0.01
+  A             B                 diff   sd(d)             95% CI        unpaired CI      verdict
+  trial_0061    trial_0061_trimmed  +0.0000  0.0000 [+0.0000,+0.0000] [-0.0334,+0.0334]   equivalent
+
+  DIFFERENT    = the 95% CI on the paired difference excludes zero
+  equivalent   = TOST rejects both one-sided nulls; the pair is
+                 interchangeable within the margin (a positive claim)
+  inconclusive = neither; more repeats would help THIS pair
+
+If the primary metric cannot separate the configurations and this one can,
+this is the metric to select on -- it is what the deliverable promises.

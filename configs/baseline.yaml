@@ -1,17 +1,20 @@
 # configs/baseline.yaml
 # Real TUAB training run on the cluster A100.
+# Baseline arm: per-segment z-score normalization (Phase 0 behaviour).
 # Eval set is intentionally untouched (run_final_eval: false).
 
 data:
   train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
   train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
+  splits_csv: /shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv
   # eval_* paths intentionally omitted — eval.run_final_eval is false.
 
 loader:
   batch_size: 64
   val_frac: 0.2
-  max_epochs_per_recording: null     # use every epoch
+  max_epochs_per_recording: null     # use every segment
   num_workers: 8
+  normalize: zscore                  # A/B arm A; see configs/baseline_uvscale.yaml
   seed: 42
 
 train:
@@ -20,9 +23,11 @@ train:
   weight_decay: 1.0e-4
   grad_clip: 1.0
   use_amp: true
-  amp_dtype: fp16
+  amp_dtype: fp16                    # bf16 disables the fused cuDNN LSTM kernel (~9x slower)
   device: cuda
-  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_v1
+  output_dir: /shared/rc/eeg-cnn-lstm/runs/baseline_zscore
+  select_metric: recording_pauc
+  aggregator: mean            # swept post-hoc from predictions_tune.npz
 
 eval:
   run_final_eval: false              # do NOT touch eval data

@@ -255,7 +255,7 @@ def _main() -> None:
     @brief Smoke test: build the model, run a fake batch, print shapes and param count.
 
     @details
-    Run as `python -m src.models.model` from the project root. Verifies the
+    Run as `python -m eeg_cnn_lstm.models.model` from the project root. Verifies the
     model constructs cleanly and produces the expected output shape on a fake
     batch matching the dataset's contract: (B, 19, 2500) -> (B,).
     """

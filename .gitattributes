@@ -1,0 +1,31 @@
+# Line endings.
+#
+# This repository is edited on Windows and run on a Linux cluster. Git's
+# default on Windows is to check files out with CRLF, and a shell script with
+# CRLF line endings fails on Linux with a confusing error -- the kernel reads
+# the trailing carriage return as part of the interpreter path and reports
+# "bad interpreter: /bin/bash^M: no such file or directory". The script looks
+# correct in every editor, which makes it an expensive hour to debug.
+#
+# So: normalize text in the repository, and force LF in the working copy for
+# everything that Linux executes or parses.
+
+* text=auto
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.cfg   text eol=lf
+*.toml  text eol=lf
+*.json  text eol=lf
+*.csv   text eol=lf
+*.md    text eol=lf
+
+# Binary: never touched.
+*.npy   binary
+*.npz   binary
+*.pt    binary
+*.png   binary
+*.pdf   binary
+*.db    binary
