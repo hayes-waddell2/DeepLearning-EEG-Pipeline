@@ -154,20 +154,36 @@ def measure(
 
     out = []
     for i, p in enumerate(points, 1):
-        model = build(p["overrides"])
-        n_par = int(model.num_parameters())
         rec: dict[str, Any] = {
             "name": p["name"],
             "axis": p.get("axis"),
             "level": p.get("level"),
-            "n_parameters": n_par,
+            "n_parameters": 0,
             "timings": {},
         }
-        print(f"[{i}/{len(points)}] {p['name']:20} {n_par:>9,} params", flush=True)
+        # One architecture that cannot run must not end the measurement. A
+        # config can build and still fail in the forward pass -- a per-block
+        # field left at the wrong length gives a model whose LSTM is sized from
+        # a channel count the CNN never produces.
+        try:
+            model = build(p["overrides"])
+            rec["n_parameters"] = int(model.num_parameters())
+        except Exception as exc:  # noqa: BLE001 - record and move on
+            rec["error"] = repr(exc)
+            print(f"[{i}/{len(points)}] {p['name']:20} FAILED TO BUILD: {exc}", flush=True)
+            out.append(rec)
+            continue
+
+        print(f"[{i}/{len(points)}] {p['name']:20} {rec['n_parameters']:>9,} params", flush=True)
         for t in threads:
             torch.set_num_threads(t)
             for b in batches:
-                med, iqr = time_forward(model, b, repeats, warmup, channels, timesteps)
+                try:
+                    med, iqr = time_forward(model, b, repeats, warmup, channels, timesteps)
+                except Exception as exc:  # noqa: BLE001 - record and move on
+                    rec["error"] = repr(exc)
+                    print(f"    t{t} b{b}: FAILED: {exc}", flush=True)
+                    continue
                 per_seg_ms = med / b * 1000.0
                 rec["timings"][f"t{t}_b{b}"] = {
                     "threads": t,
@@ -195,13 +211,23 @@ def report(records: list[dict[str, Any]], threads: list[int], batches: list[int]
     @param threads Thread counts measured.
     @param batches Batch sizes measured.
     """
-    rs = sorted(records, key=lambda r: r["n_parameters"])
+    bad = [r for r in records if not r.get("timings")]
+    rs = sorted([r for r in records if r.get("timings")], key=lambda r: r["n_parameters"])
+    if bad:
+        print("\nNOT MEASURED:")
+        for r in bad:
+            print(f"  {r['name']:20} {r.get('error', 'no timings')}")
+    if not rs:
+        print("\nNothing measured.")
+        return
     for t in threads:
         for b in batches:
             key = f"t{t}_b{b}"
             print(f"\n--- {t} thread(s), batch {b} ---")
             print(f"  {'point':20} {'params':>10} {'ms/segment':>11} {'s/recording':>12}  ")
             for r in rs:
+                if key not in r["timings"]:
+                    continue
                 d = r["timings"][key]
                 flag = "  <- noisy" if d["noisy"] else ""
                 print(
