@@ -149,6 +149,85 @@ def scale_channels(mult: float) -> list[int]:
     return [max(MIN_CHANNELS, int(round(c * mult))) for c in BASE_CONV_CHANNELS]
 
 
+## @brief Combination points for the coverage sweep.
+#
+#  The one-axis-at-a-time design is correct for attribution and wrong for
+#  x-axis coverage: no single move reaches below ~67K parameters, because the
+#  convolutional stack and classification head hold the count up regardless of
+#  the recurrent state. These points move several axes at once, purely to
+#  extend the parameter range, and are labelled `combination` so they are
+#  excluded from the per-axis analysis.
+#
+#  `lstm_bidirectional` appears here and nowhere else: every top-ranked search
+#  trial was bidirectional and the one-axis sweep never tested the alternative,
+#  yet it roughly halves both the recurrent parameters and the head's input.
+COMBOS: dict[str, dict[str, Any]] = {
+    "tiny_1": {"conv_width": 0.25, "lstm_hidden": 16, "lstm_layers": 1},
+    "tiny_2": {
+        "conv_width": 0.25,
+        "lstm_hidden": 16,
+        "lstm_layers": 1,
+        "lstm_bidirectional": False,
+    },
+    "tiny_3": {"conv_width": 0.25, "lstm_hidden": 32, "head_hidden": 32},
+    "small_1": {"conv_width": 0.5, "lstm_hidden": 16},
+    "small_2": {"conv_width": 0.5, "lstm_hidden": 32},
+    "mid_gap": {"conv_width": 1.5, "lstm_hidden": 128},
+}
+
+
+def combo(name: str, changes: dict[str, Any]) -> dict[str, Any]:
+    """
+    @brief Build a combination point: the centre with several axes moved.
+
+    @details
+    Unlike `point`, the result is not attributable to any single axis and must
+    not enter the per-axis analysis. It carries `axis: "combination"` so the
+    analysis groups it separately.
+
+    @param name Point name.
+    @param changes Mapping of axis name to level; accepts the four sweep axes
+           plus `lstm_bidirectional` and `head_hidden`.
+    @return A configuration entry with `name`, `axis`, `level` and `overrides`.
+    @throws ValueError If a change names an axis that cannot be set.
+    """
+    ov = copy.deepcopy(CENTER)
+    model = ov["model"]
+    for axis, level in changes.items():
+        if axis == "conv_depth":
+            model["conv_channels"], model["pool_sizes"] = (list(x) for x in DEPTHS[level])
+        elif axis == "conv_width":
+            model["conv_channels"] = scale_channels(float(level))
+        elif axis == "lstm_layers":
+            model["lstm_layers"] = int(level)
+        elif axis == "lstm_hidden":
+            model["lstm_hidden"] = int(level)
+        elif axis == "lstm_bidirectional":
+            model["lstm_bidirectional"] = bool(level)
+        elif axis == "head_hidden":
+            model["head_hidden"] = int(level)
+        else:
+            raise ValueError(f"combination point {name!r}: cannot set {axis!r}")
+    return {
+        "name": name,
+        "axis": "combination",
+        "level": 0,
+        "changes": changes,
+        "overrides": ov,
+    }
+
+
+def small_points() -> list[dict[str, Any]]:
+    """
+    @brief The coverage sweep: the centre plus every combination point.
+
+    @return Configuration entries, centre first.
+    """
+    return [point("conv_depth", CENTER_LEVEL["conv_depth"])] + [
+        combo(n, c) for n, c in COMBOS.items()
+    ]
+
+
 def point(axis: str, level: Any) -> dict[str, Any]:
     """
     @brief Build one ablation point: the centre with a single axis moved.
@@ -261,7 +340,9 @@ def describe(points: list[dict[str, Any]], seeds: list[int]) -> None:
         if n:
             counts.append(n)
         arch = (
-            f"{m['conv_channels']} / {m['pool_sizes']} / " f"{m['lstm_hidden']}x{m['lstm_layers']}"
+            f"{m['conv_channels']} / {m['pool_sizes']} / "
+            f"{m['lstm_hidden']}x{m['lstm_layers']}"
+            f"{'bi' if m['lstm_bidirectional'] else 'uni'} / h{m['head_hidden']}"
         )
         print(
             f"  {p['name']:22} {p['axis']:12} {str(p['level']):>6} "
@@ -282,7 +363,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     @return Namespace of options.
     """
     p = argparse.ArgumentParser(description="Generate ablation point sets.")
-    p.add_argument("--set", default="shape", choices=["shape", "decision"])
+    p.add_argument("--set", default="shape", choices=["shape", "decision", "small"])
     p.add_argument("--out", default=None, help="Destination JSON; omit to print only")
     p.add_argument(
         "--points",
@@ -304,7 +385,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     a = parse_args(argv)
     allp = shape_points()
 
-    if a.set == "shape":
+    if a.set == "small":
+        points, seeds = small_points(), SHAPE_SEEDS
+        note = (
+            "Coverage sweep for the parameter-efficiency analysis. These points "
+            "move several capacity axes at once and are therefore NOT "
+            "attributable to any single axis; they exist to extend parameter "
+            "coverage below the floor reachable by any one-axis change (~67K) "
+            "and above the 700K-2.4M gap the shape sweep leaves. They are "
+            "labelled axis=combination and must be excluded from the per-axis "
+            "curves. Three seeds, shared with the shape sweep so the centre is "
+            "directly comparable."
+        )
+    elif a.set == "shape":
         points, seeds = allp, SHAPE_SEEDS
         note = (
             "Shape sweep for the parameter-efficiency ablation. Everything is "
