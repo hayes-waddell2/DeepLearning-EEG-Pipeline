@@ -465,7 +465,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         logger.info(f"Built {len(configs) * len(folds)} override trees; all valid.")
         return 0
 
-    from eeg_cnn_lstm.models.train import run as train_run
+    from eeg_cnn_lstm.models.train import train as train_run
 
     deadline = None if a.timeout_hours is None else time.monotonic() + a.timeout_hours * 3600.0
     describe(configs, folds, seed)
