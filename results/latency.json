@@ -1,0 +1,597 @@
+{
+  "segments_per_recording": 274,
+  "torch": "2.6.0+cu124",
+  "machine": "x86_64",
+  "threads": [
+    1,
+    4
+  ],
+  "batches": [
+    1,
+    32
+  ],
+  "repeats": 20,
+  "quick": false,
+  "records": [
+    {
+      "name": "center",
+      "axis": "center",
+      "level": 3,
+      "n_parameters": 246497,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002892101532779634,
+          "iqr_s": 4.879001062363386e-05,
+          "per_segment_ms": 2.892101532779634,
+          "per_recording_s": 0.7924358199816197,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.05211243001394905,
+          "iqr_s": 0.004888396069873124,
+          "per_segment_ms": 1.6285134379359079,
+          "per_recording_s": 0.44621268199443875,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004140090517466888,
+          "iqr_s": 0.00017738796304911375,
+          "per_segment_ms": 4.140090517466888,
+          "per_recording_s": 1.1343848017859273,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.04832674597855657,
+          "iqr_s": 0.05310664599528536,
+          "per_segment_ms": 1.510210811829893,
+          "per_recording_s": 0.41379776244139066,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_depth_2",
+      "axis": "conv_depth",
+      "level": 2,
+      "n_parameters": 256833,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.004253195016644895,
+          "iqr_s": 0.00010621797991916537,
+          "per_segment_ms": 4.253195016644895,
+          "per_recording_s": 1.1653754345607013,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.08962503349175677,
+          "iqr_s": 0.002475357032380998,
+          "per_segment_ms": 2.800782296617399,
+          "per_recording_s": 0.7674143492731673,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004413874994497746,
+          "iqr_s": 9.853806113824248e-05,
+          "per_segment_ms": 4.413874994497746,
+          "per_recording_s": 1.2094017484923825,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.09285770601127297,
+          "iqr_s": 0.003537692013196647,
+          "per_segment_ms": 2.90180331285228,
+          "per_recording_s": 0.7950941077215248,
+          "noisy": false
+        }
+      }
+    },
+    {
+      "name": "conv_depth_4",
+      "axis": "conv_depth",
+      "level": 4,
+      "n_parameters": 218033,
+      "timings": {},
+      "error": "RuntimeError('input.size(-1) must be equal to input_size. Expected 128, got 64')"
+    },
+    {
+      "name": "lstm_layers_1",
+      "axis": "lstm_layers",
+      "level": 1,
+      "n_parameters": 147169,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002130244014551863,
+          "iqr_s": 2.725201193243265e-05,
+          "per_segment_ms": 2.130244014551863,
+          "per_recording_s": 0.5836868599872105,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.041830749018117785,
+          "iqr_s": 0.0032016539480537176,
+          "per_segment_ms": 1.3072109068161808,
+          "per_recording_s": 0.35817578846763354,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.0024746180279180408,
+          "iqr_s": 0.00021349504822865129,
+          "per_segment_ms": 2.4746180279180408,
+          "per_recording_s": 0.6780453396495432,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.014960428496124223,
+          "iqr_s": 0.05201682401821017,
+          "per_segment_ms": 0.46751339050388196,
+          "per_recording_s": 0.12809866899806366,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "lstm_layers_3",
+      "axis": "lstm_layers",
+      "level": 3,
+      "n_parameters": 345825,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.0034671785251703113,
+          "iqr_s": 0.0001319960574619472,
+          "per_segment_ms": 3.4671785251703113,
+          "per_recording_s": 0.9500069158966653,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.05658124602632597,
+          "iqr_s": 0.0030175760039128363,
+          "per_segment_ms": 1.7681639383226866,
+          "per_recording_s": 0.4844769191004161,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004613503988366574,
+          "iqr_s": 4.962598904967308e-05,
+          "per_segment_ms": 4.613503988366574,
+          "per_recording_s": 1.2641000928124413,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.053208641009405255,
+          "iqr_s": 0.05157224397407845,
+          "per_segment_ms": 1.6627700315439142,
+          "per_recording_s": 0.4555989886430325,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "lstm_hidden_16",
+      "axis": "lstm_hidden",
+      "level": 16,
+      "n_parameters": 66785,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002463898970745504,
+          "iqr_s": 0.00037723605055361986,
+          "per_segment_ms": 2.463898970745504,
+          "per_recording_s": 0.6751083179842681,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.03884933498920873,
+          "iqr_s": 0.004618325037881732,
+          "per_segment_ms": 1.2140417184127728,
+          "per_recording_s": 0.33264743084509973,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.0035295784764457494,
+          "iqr_s": 0.0002893650089390576,
+          "per_segment_ms": 3.5295784764457494,
+          "per_recording_s": 0.9671045025461353,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.017652876500505954,
+          "iqr_s": 0.05172624404076487,
+          "per_segment_ms": 0.5516523906408111,
+          "per_recording_s": 0.15115275503558223,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "lstm_hidden_32",
+      "axis": "lstm_hidden",
+      "level": 32,
+      "n_parameters": 110305,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.0024382449919357896,
+          "iqr_s": 0.0002058320096693933,
+          "per_segment_ms": 2.4382449919357896,
+          "per_recording_s": 0.6680791277904063,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.04459418053738773,
+          "iqr_s": 0.0051193899707868695,
+          "per_segment_ms": 1.3935681417933665,
+          "per_recording_s": 0.3818376708513824,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.0036060180282220244,
+          "iqr_s": 0.00031995802419260144,
+          "per_segment_ms": 3.6060180282220244,
+          "per_recording_s": 0.9880489397328347,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.018865791498683393,
+          "iqr_s": 0.05274785601068288,
+          "per_segment_ms": 0.589555984333856,
+          "per_recording_s": 0.16153833970747655,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "lstm_hidden_128",
+      "axis": "lstm_hidden",
+      "level": 128,
+      "n_parameters": 715489,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.005010772525565699,
+          "iqr_s": 0.00016453402349725366,
+          "per_segment_ms": 5.010772525565699,
+          "per_recording_s": 1.3729516720050015,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.08144629350863397,
+          "iqr_s": 0.003281382960267365,
+          "per_segment_ms": 2.5451966721448116,
+          "per_recording_s": 0.6973838881676784,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004386729502584785,
+          "iqr_s": 0.00025401997845619917,
+          "per_segment_ms": 4.386729502584785,
+          "per_recording_s": 1.2019638837082312,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.0843441009928938,
+          "iqr_s": 0.05258013401180506,
+          "per_segment_ms": 2.6357531560279313,
+          "per_recording_s": 0.7221963647516532,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "lstm_hidden_256",
+      "axis": "lstm_hidden",
+      "level": 256,
+      "n_parameters": 2439905,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.021784270502394065,
+          "iqr_s": 0.001040625968016684,
+          "per_segment_ms": 21.784270502394065,
+          "per_recording_s": 5.968890117655974,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.2123478399880696,
+          "iqr_s": 0.00995052099460736,
+          "per_segment_ms": 6.635869999627175,
+          "per_recording_s": 1.818228379897846,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.006894357007695362,
+          "iqr_s": 0.00018678198102861643,
+          "per_segment_ms": 6.894357007695362,
+          "per_recording_s": 1.8890538201085292,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.11951229150872678,
+          "iqr_s": 0.05123434105189517,
+          "per_segment_ms": 3.7347591096477117,
+          "per_recording_s": 1.023323996043473,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_width_0.25",
+      "axis": "conv_width",
+      "level": 0.25,
+      "n_parameters": 161177,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002193696505855769,
+          "iqr_s": 8.138304110616446e-05,
+          "per_segment_ms": 2.193696505855769,
+          "per_recording_s": 0.6010728426044807,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.024358884489629418,
+          "iqr_s": 0.001726172980852425,
+          "per_segment_ms": 0.7612151403009193,
+          "per_recording_s": 0.2085729484424519,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.003196195524651557,
+          "iqr_s": 3.730203025043011e-05,
+          "per_segment_ms": 3.196195524651557,
+          "per_recording_s": 0.8757575737545267,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.013694405002752319,
+          "iqr_s": 0.05194624396972358,
+          "per_segment_ms": 0.42795015633600997,
+          "per_recording_s": 0.11725834283606673,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_width_0.5",
+      "axis": "conv_width",
+      "level": 0.5,
+      "n_parameters": 185265,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002276843471918255,
+          "iqr_s": 0.00017075100913643837,
+          "per_segment_ms": 2.276843471918255,
+          "per_recording_s": 0.6238551113056019,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.030734453990589827,
+          "iqr_s": 0.001248195068910718,
+          "per_segment_ms": 0.9604516872059321,
+          "per_recording_s": 0.2631637622944254,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.00340156999300234,
+          "iqr_s": 0.00023516599321737885,
+          "per_segment_ms": 3.40156999300234,
+          "per_recording_s": 0.9320301780826412,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.01513978699222207,
+          "iqr_s": 0.05047328502405435,
+          "per_segment_ms": 0.4731183435069397,
+          "per_recording_s": 0.12963442612090148,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_width_0.75",
+      "axis": "conv_width",
+      "level": 0.75,
+      "n_parameters": 213705,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.002722745994105935,
+          "iqr_s": 8.833693573251367e-05,
+          "per_segment_ms": 2.722745994105935,
+          "per_recording_s": 0.7460324023850262,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.042851556005189195,
+          "iqr_s": 0.0018381320405751467,
+          "per_segment_ms": 1.3391111251621624,
+          "per_recording_s": 0.3669164482944325,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.0034348610206507146,
+          "iqr_s": 7.705000462010503e-05,
+          "per_segment_ms": 3.4348610206507146,
+          "per_recording_s": 0.9411519196582958,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.019133043475449085,
+          "iqr_s": 0.051849068026058376,
+          "per_segment_ms": 0.5979076086077839,
+          "per_recording_s": 0.1638266847585328,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_width_1.5",
+      "axis": "conv_width",
+      "level": 1.5,
+      "n_parameters": 325137,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.003659502981463447,
+          "iqr_s": 0.00019355997210368514,
+          "per_segment_ms": 3.659502981463447,
+          "per_recording_s": 1.0027038169209845,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.06926410846062936,
+          "iqr_s": 0.002661301929038018,
+          "per_segment_ms": 2.1645033893946675,
+          "per_recording_s": 0.5930739286941389,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004033761011669412,
+          "iqr_s": 0.0002801390364766121,
+          "per_segment_ms": 4.033761011669412,
+          "per_recording_s": 1.105250517197419,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.07953229697886854,
+          "iqr_s": 0.050695487996563315,
+          "per_segment_ms": 2.485384280589642,
+          "per_recording_s": 0.6809952928815619,
+          "noisy": true
+        }
+      }
+    },
+    {
+      "name": "conv_width_2.0",
+      "axis": "conv_width",
+      "level": 2.0,
+      "n_parameters": 421185,
+      "timings": {
+        "t1_b1": {
+          "threads": 1,
+          "batch": 1,
+          "median_s": 0.00507213149103336,
+          "iqr_s": 0.000344879983458668,
+          "per_segment_ms": 5.07213149103336,
+          "per_recording_s": 1.3897640285431407,
+          "noisy": false
+        },
+        "t1_b32": {
+          "threads": 1,
+          "batch": 32,
+          "median_s": 0.10031226399587467,
+          "iqr_s": 0.008327974006533623,
+          "per_segment_ms": 3.1347582498710835,
+          "per_recording_s": 0.8589237604646769,
+          "noisy": false
+        },
+        "t4_b1": {
+          "threads": 4,
+          "batch": 1,
+          "median_s": 0.004247351986123249,
+          "iqr_s": 0.000586783979088068,
+          "per_segment_ms": 4.247351986123249,
+          "per_recording_s": 1.1637744441977702,
+          "noisy": false
+        },
+        "t4_b32": {
+          "threads": 4,
+          "batch": 32,
+          "median_s": 0.08442142949206755,
+          "iqr_s": 0.052132797020021826,
+          "per_segment_ms": 2.638169671627111,
+          "per_recording_s": 0.7228584900258284,
+          "noisy": true
+        }
+      }
+    }
+  ]
+}

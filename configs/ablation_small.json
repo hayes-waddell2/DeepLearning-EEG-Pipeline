@@ -1,0 +1,258 @@
+{
+  "study": "ablation-small",
+  "objective": "recording_pauc_sens",
+  "seeds": [
+    42,
+    1337,
+    2024
+  ],
+  "center": "trial_0061",
+  "note": "Coverage sweep for the parameter-efficiency analysis. These points move several capacity axes at once and are therefore NOT attributable to any single axis; they exist to extend parameter coverage below the floor reachable by any one-axis change (~67K) and above the 700K-2.4M gap the shape sweep leaves. They are labelled axis=combination and must be excluded from the per-axis curves. Three seeds, shared with the shape sweep so the centre is directly comparable.",
+  "configs": [
+    {
+      "name": "center",
+      "axis": "center",
+      "level": 3,
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            32,
+            64,
+            128
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 64,
+          "lstm_layers": 2,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "tiny_1",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 0.25,
+        "lstm_hidden": 16,
+        "lstm_layers": 1
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            8,
+            16,
+            32
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 16,
+          "lstm_layers": 1,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "tiny_2",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 0.25,
+        "lstm_hidden": 16,
+        "lstm_layers": 1,
+        "lstm_bidirectional": false
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            8,
+            16,
+            32
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 16,
+          "lstm_layers": 1,
+          "lstm_bidirectional": false,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "tiny_3",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 0.25,
+        "lstm_hidden": 32,
+        "head_hidden": 32
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            8,
+            16,
+            32
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 32,
+          "lstm_layers": 2,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 32,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "small_1",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 0.5,
+        "lstm_hidden": 16
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            16,
+            32,
+            64
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 16,
+          "lstm_layers": 2,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "small_2",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 0.5,
+        "lstm_hidden": 32
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            16,
+            32,
+            64
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 32,
+          "lstm_layers": 2,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    },
+    {
+      "name": "mid_gap",
+      "axis": "combination",
+      "level": 0,
+      "changes": {
+        "conv_width": 1.5,
+        "lstm_hidden": 128
+      },
+      "overrides": {
+        "model": {
+          "conv_channels": [
+            48,
+            96,
+            192
+          ],
+          "pool_sizes": [
+            4,
+            2,
+            2
+          ],
+          "conv_dropout": 0.06833770752158194,
+          "lstm_hidden": 128,
+          "lstm_layers": 2,
+          "lstm_bidirectional": true,
+          "lstm_dropout": 0.3899726212809172,
+          "head_hidden": 64,
+          "head_dropout": 0.0792873966634228
+        },
+        "train": {
+          "lr": 0.002070212608238921,
+          "pos_weight": 1.2517970214422354,
+          "weight_decay": 2.388470451335015e-05
+        }
+      }
+    }
+  ]
+}

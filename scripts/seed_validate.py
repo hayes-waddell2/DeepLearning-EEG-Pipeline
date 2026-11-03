@@ -55,6 +55,7 @@ python -m scripts.seed_validate --report-only --out-dir runs/seedval
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import statistics
 import sys
@@ -93,13 +94,13 @@ def load_configs(path: Path) -> tuple[list[dict[str, Any]], list[int]]:
     if not configs or not seeds:
         raise ValueError(f"{path} must contain non-empty 'configs' and 'seeds'")
     for c in configs:
-        if "name" not in c or "params" not in c:
-            raise ValueError(f"{path}: every config needs 'name' and 'params'")
+        if "name" not in c or not ("params" in c or "overrides" in c):
+            raise ValueError(f"{path}: every config needs 'name' and 'params' or 'overrides'")
     return configs, [int(s) for s in seeds]
 
 
 def build_overrides(
-    params: dict[str, Any],
+    config: dict[str, Any],
     seed: int,
     output_dir: str,
     objective: str,
@@ -107,28 +108,42 @@ def build_overrides(
     num_epochs: Optional[int],
 ) -> dict[str, Any]:
     """
-    @brief Turn one sampled parameter set into a full config override tree.
+    @brief Turn one configuration entry into a full config override tree.
 
     @details
-    `params_to_overrides` is the same function the search used, so a
-    configuration re-run here is bit-for-bit the one the search scored --
-    `conv_width_mult` and `downsample` go through their transforms rather than
-    being re-derived, which is where a hand-written re-run would drift.
+    Two input forms are accepted, because two stages feed this runner.
+
+    `params` holds search-space values and goes through `params_to_overrides`,
+    the same function the search used, so a configuration re-run here is
+    bit-for-bit the one the search scored -- `conv_width_mult` and `downsample`
+    pass through their transforms rather than being re-derived, which is where
+    a hand-written re-run would drift.
+
+    `overrides` holds a config tree directly. The parameter-efficiency ablation
+    needs this: it varies CNN depth, which changes `conv_channels` and
+    `pool_sizes` together and cannot be expressed in a search space whose pool
+    spec is fixed at three blocks, and it reaches capacities the search never
+    offered. An ablation is not bound by the space the search explored.
 
     The seed lands on `loader.seed`, which drives initialization, batch order
     and segment sampling. It does **not** move the patient-level T/E split:
     that comes from `data.splits_csv` and stays fixed, or the runs would not be
     comparable.
 
-    @param params Search-space parameters for one configuration.
+    @param config One entry from the configuration set, carrying either
+           `params` or `overrides`.
     @param seed RNG seed for this repeat.
     @param output_dir Run directory for this repeat.
     @param objective `train.select_metric` to optimize and report.
     @param train_data_dir Optional node-local staged copy of the training data.
     @param num_epochs Optional epoch-budget override.
     @return Nested override tree to merge over the YAML config.
+    @throws KeyError If the entry carries neither `params` nor `overrides`.
     """
-    ov = params_to_overrides(params)
+    if "overrides" in config:
+        ov = copy.deepcopy(config["overrides"])
+    else:
+        ov = params_to_overrides(config["params"])
     ov.setdefault("loader", {})["seed"] = int(seed)
     train = ov.setdefault("train", {})
     train["output_dir"] = output_dir
@@ -330,7 +345,7 @@ def run_all(
                 bench = train_fn(
                     config_path=base_config,
                     config_overrides=build_overrides(
-                        cfg["params"],
+                        cfg,
                         seed,
                         str(run_dir),
                         objective,
@@ -444,7 +459,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if a.describe or a.dry_run:
         for c in configs:
             ov = build_overrides(
-                c["params"],
+                c,
                 seeds[0],
                 str(out_dir / c["name"]),
                 a.objective,

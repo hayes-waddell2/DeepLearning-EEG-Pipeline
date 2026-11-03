@@ -145,9 +145,7 @@ def parse_args() -> argparse.Namespace:
         default="configs/baseline.yaml",
         help="Config to inherit data and loader settings from",
     )
-    p.add_argument(
-        "--out", default="configs/step2_earlystop.yaml", help="Destination config path"
-    )
+    p.add_argument("--out", default="configs/step2_earlystop.yaml", help="Destination config path")
     p.add_argument(
         "--output-dir",
         default="runs/step2-earlystop",
@@ -196,9 +194,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Replace the destination if it already exists",
     )
-    p.add_argument(
-        "--dry-run", action="store_true", help="Print the train block and write nothing"
-    )
+    p.add_argument("--dry-run", action="store_true", help="Print the train block and write nothing")
     return p.parse_args()
 
 
