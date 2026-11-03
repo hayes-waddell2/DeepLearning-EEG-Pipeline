@@ -229,7 +229,9 @@ def validity(stats: dict[str, dict]) -> tuple[bool, float, list[str]]:
     return ok, rho, msgs
 
 
-def sign_test(stats: dict[str, dict], center: str = "center") -> Optional[dict]:
+def sign_test(
+    stats: dict[str, dict], spec: dict[str, dict], center: str = "center"
+) -> Optional[dict]:
     """
     @brief Test whether the centre is beaten by any single-axis move.
 
@@ -238,14 +240,23 @@ def sign_test(stats: dict[str, dict], center: str = "center") -> Optional[dict]:
     moves falling below the centre does, and it is the claim the sweep is
     actually able to support.
 
+    Combination points move several axes at once, so they are not single-axis
+    moves and are excluded here. Counting them would both mislabel the test and
+    inflate it, since the coverage set is chosen to sit away from the centre.
+
     @param stats Per-point statistics.
+    @param spec Point metadata; points with `axis == "combination"` are skipped.
     @param center Name of the centre point.
     @return Summary dict, or `None` if the centre is missing.
     """
     if center not in stats or stats[center].get("n", 0) == 0:
         return None
     c = stats[center]["mean"]
-    off = [(k, v["mean"]) for k, v in stats.items() if k != center and v.get("n", 0) > 0]
+    off = [
+        (k, v["mean"])
+        for k, v in stats.items()
+        if k != center and v.get("n", 0) > 0 and spec.get(k, {}).get("axis") != "combination"
+    ]
     below = sum(1 for _, m in off if m < c)
     n = len(off)
     if n == 0:
@@ -551,7 +562,7 @@ def report(stats, spec, psd, df, ok, msgs, sgn, out_dir: Path) -> None:
         )
 
     emit()
-    emit("EQUIVALENT TO THE SELECTED MODEL (within one pooled sd), smallest first")
+    emit("INDISTINGUISHABLE FROM THE SELECTED MODEL (within one pooled sd), smallest first")
     eq = [(v["n_parameters"], k, v) for k, v in rows if abs(v["mean"] - cm) <= psd]
     for n_par, k, v in sorted(eq):
         emit(f"  {n_par:>10,}  {k:20} {v['mean']:.4f}")
@@ -611,7 +622,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     psd, df = pooled_sd(stats)
     ok, _, msgs = validity(stats)
-    sgn = sign_test(stats, a.center)
+    sgn = sign_test(stats, spec, a.center)
 
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
