@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.utils.dataset import load_manifest
+from eeg_cnn_lstm.utils.dataset import load_manifest
 
 ## @brief Expected TUAB anonymized subject ID format.
 SUBJECT_RE = re.compile(r"^[a-z]{8}$")
@@ -62,14 +62,10 @@ def summarize(df: pd.DataFrame) -> tuple[dict, pd.DataFrame]:
     mixed = per_patient[per_patient["n_distinct_labels"] > 1]
 
     # Patient label = mode across recordings (same rule the current split uses).
-    patient_label = df.groupby("subject_id")["label"].agg(
-        lambda s: int(s.mode().iat[0])
-    )
+    patient_label = df.groupby("subject_id")["label"].agg(lambda s: int(s.mode().iat[0]))
 
     rec_dist = per_patient["n_recordings"].value_counts().sort_index()
-    malformed = sorted(
-        s for s in per_patient.index if not SUBJECT_RE.match(str(s))
-    )
+    malformed = sorted(s for s in per_patient.index if not SUBJECT_RE.match(str(s)))
 
     summary = {
         "n_recordings": int(len(df)),
@@ -172,9 +168,7 @@ def main() -> int:
     (out_dir / "patient_overlap_summary.json").write_text(json.dumps(summary, indent=2))
     train_mixed.to_csv(out_dir / "train_mixed_label_patients.csv", index=False)
     if overlap:
-        pd.Series(overlap, name="subject_id").to_csv(
-            out_dir / "overlap_patients.csv", index=False
-        )
+        pd.Series(overlap, name="subject_id").to_csv(out_dir / "overlap_patients.csv", index=False)
     print(f"\nWrote summary to {out_dir.resolve()}")
 
     return 1 if overlap else 0

@@ -1,0 +1,16 @@
+====================================================================================
+CROSS-VALIDATION -- 10 patient-level folds, metric pauc_tpr0.9
+====================================================================================
+
+  config                   params  folds     mean      sd      min      max spec_at_sens0.95
+  center                  246,497     10   0.7752  0.0461   0.7255   0.8551     0.6445
+  small_2                  65,457     10   0.7676  0.0499   0.7119   0.8502     0.6253
+
+  center: folds span 0.1296
+  small_2: folds span 0.1382
+
+Two or more configurations were cross-validated on the same folds.
+Compare them paired on fold rather than from the means above:
+  python -m scripts.compare_configs --runs <out-dir>/runs.json --block fold --margin 0.01
+
+====================================================================================

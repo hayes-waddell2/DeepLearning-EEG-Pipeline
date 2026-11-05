@@ -19,7 +19,7 @@ python src/preprocessing/preprocessing.py --input data/raw/edf/eval  --output da
 
 echo ""
 echo "=== 4/4: Training + evaluation ==="
-python -m src.eeg_cnn_lstm.models.train_b --config configs/demo.yaml
+python -m eeg_cnn_lstm.models.train --config configs/demo.yaml
 
 echo ""
 echo "=== Demo complete ==="

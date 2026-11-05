@@ -1,0 +1,32 @@
+{
+  "study": "ablation-protocol-check",
+  "objective": "recording_pauc_sens",
+  "seeds": [42, 1337, 2024],
+  "note": "Protocol validation for the parameter-efficiency ablation. One configuration -- the selected model, trial 61 -- re-run under the trimmed training protocol (val_every_frac 0.5, min_delta 0.02, patience 2 epochs) on the same three seeds used for seed validation. Under the original protocol this configuration scored mean 0.7921, sd 0.0032. Acceptance rule, stated before running: the trim is adopted if the paired mean difference is within +/-0.01, the same equivalence margin used for configuration selection. If it is not, the ablation runs under the original protocol and costs about five hours more.",
+  "configs": [
+    {
+      "name": "trial_0061",
+      "source_trial": 61,
+      "source_state": "COMPLETE",
+      "hpo_score": 0.7953927804100682,
+      "hpo_spec_at_sens0.95": 0.6423357664233577,
+      "hpo_n_parameters": 246497,
+      "seedval_mean_original_protocol": 0.7921,
+      "seedval_sd_original_protocol": 0.0032,
+      "params": {
+        "conv_dropout": 0.06833770752158194,
+        "conv_width_mult": 1.0,
+        "downsample": "4,2,2",
+        "head_dropout": 0.0792873966634228,
+        "head_hidden": 64,
+        "lr": 0.002070212608238921,
+        "lstm_bidirectional": true,
+        "lstm_dropout": 0.3899726212809172,
+        "lstm_hidden": 64,
+        "lstm_layers": 2,
+        "pos_weight": 1.2517970214422354,
+        "weight_decay": 2.388470451335015e-05
+      }
+    }
+  ]
+}
