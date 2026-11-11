@@ -110,7 +110,10 @@ def time_forward(
     @param warmup Discarded iterations before timing.
     @param channels Input channels.
     @param timesteps Samples per segment.
-    @return Tuple `(median_seconds, iqr_seconds)` for one forward pass.
+    @return Tuple `(median_s, iqr_s, mean_s, sd_s)` for one forward pass.
+            The median and IQR are robust to a busy node; the mean and
+            standard deviation are what the paper reports, and comparing the
+            two says whether the machine was quiet during the run.
     """
     import torch
 
@@ -126,7 +129,9 @@ def time_forward(
     times.sort()
     med = st.median(times)
     iqr = times[int(0.75 * (len(times) - 1))] - times[int(0.25 * (len(times) - 1))]
-    return med, iqr
+    mean = st.fmean(times)
+    sd = st.stdev(times) if len(times) > 1 else 0.0
+    return med, iqr, mean, sd
 
 
 def measure(
@@ -179,7 +184,9 @@ def measure(
             torch.set_num_threads(t)
             for b in batches:
                 try:
-                    med, iqr = time_forward(model, b, repeats, warmup, channels, timesteps)
+                    med, iqr, mean_s, sd_s = time_forward(
+                        model, b, repeats, warmup, channels, timesteps
+                    )
                 except Exception as exc:  # noqa: BLE001 - record and move on
                     rec["error"] = repr(exc)
                     print(f"    t{t} b{b}: FAILED: {exc}", flush=True)
@@ -192,6 +199,11 @@ def measure(
                     "iqr_s": iqr,
                     "per_segment_ms": per_seg_ms,
                     "per_recording_s": per_seg_ms * SEGMENTS_PER_RECORDING / 1000.0,
+                    # Each repeat yields one per-recording estimate; these are
+                    # the mean and spread of those estimates, not the spread of
+                    # a single recording's total runtime.
+                    "per_recording_mean_s": mean_s / b * SEGMENTS_PER_RECORDING,
+                    "per_recording_sd_s": sd_s / b * SEGMENTS_PER_RECORDING,
                     "noisy": iqr > 0.25 * med,
                 }
         out.append(rec)
@@ -224,15 +236,20 @@ def report(records: list[dict[str, Any]], threads: list[int], batches: list[int]
         for b in batches:
             key = f"t{t}_b{b}"
             print(f"\n--- {t} thread(s), batch {b} ---")
-            print(f"  {'point':20} {'params':>10} {'ms/segment':>11} {'s/recording':>12}  ")
+            print(
+                f"  {'point':20} {'params':>10} {'ms/segment':>11} "
+                f"{'s/rec (med)':>12} {'s/rec (mean+/-sd)':>20}  "
+            )
             for r in rs:
                 if key not in r["timings"]:
                     continue
                 d = r["timings"][key]
                 flag = "  <- noisy" if d["noisy"] else ""
+                ms = f"{d['per_recording_mean_s']:.3f} +/- {d['per_recording_sd_s']:.3f}"
                 print(
                     f"  {r['name']:20} {r['n_parameters']:>10,} "
-                    f"{d['per_segment_ms']:>11.2f} {d['per_recording_s']:>12.2f}{flag}"
+                    f"{d['per_segment_ms']:>11.2f} {d['per_recording_s']:>12.2f} "
+                    f"{ms:>20}{flag}"
                 )
 
     key = f"t{threads[0]}_b{batches[-1]}"
