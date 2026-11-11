@@ -2,6 +2,8 @@ data:
   splits_csv: /shared/rc/eeg-cnn-lstm/data/splits/tuab_train_splits.csv
   train_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train
   train_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/train/train_manifest.csv
+  eval_manifest: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/eval/eval_manifest.csv
+  eval_data_dir: /shared/rc/eeg-cnn-lstm/data/processed-datasets/tuab_f16uv/eval/eval
 eval:
   run_final_eval: false
 loader:
