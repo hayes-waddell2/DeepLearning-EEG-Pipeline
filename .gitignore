@@ -89,3 +89,9 @@ Thumbs.db
 *.swp
 *~
 .env
+# Data use agreement: no dataset-derived content in the repo
+results/**/*.csv
+splits/
+data/
+*.npy
+*_manifest.csv

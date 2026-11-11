@@ -1,0 +1,36 @@
+====================================================================================
+VALIDITY CHECK
+Spearman(parameters, best_check) = +0.043 over 13 points
+  best_check spans 2.3 to 6.3
+  PASS: no systematic relationship; the arms measure capacity.
+
+Pooled within-point sd: 0.0103 on 26 df
+Failed runs: {'conv_depth_4': 3}
+
+CENTRE AS A LOCAL OPTIMUM
+  11 of 12 single-axis moves scored below the selected configuration (sign test p = 0.0063)
+  exception: conv_width_0.25 at 0.7928 (sd 0.0256 vs centre 0.0032)
+
+PER POINT, by distance from the selected configuration
+  point                    params     pauc      sd    delta  in sd  spec@.95    min
+  conv_width_0.25         161,177   0.7928  0.0256  +0.0007    0.1    0.6655   12.8
+  center                  246,497   0.7921  0.0032  +0.0000    0.0    0.6399   10.9
+  conv_depth_2            256,833   0.7865  0.0070  -0.0056   -0.5    0.6399    9.0
+  conv_width_1.5          325,137   0.7851  0.0068  -0.0070   -0.7    0.6046    9.8
+  lstm_hidden_32          110,305   0.7815  0.0088  -0.0106   -1.0    0.6204    9.2
+  conv_width_2.0          421,185   0.7814  0.0118  -0.0107   -1.0    0.6302    9.6
+  lstm_layers_1           147,169   0.7807  0.0065  -0.0114   -1.1    0.5912   10.3
+  lstm_layers_3           345,825   0.7804  0.0074  -0.0117   -1.1    0.6192   11.2
+  conv_width_0.5          185,265   0.7800  0.0050  -0.0121   -1.2    0.6302   10.4
+  lstm_hidden_128         715,489   0.7798  0.0104  -0.0123   -1.2    0.6168    8.9
+  lstm_hidden_256       2,439,905   0.7776  0.0104  -0.0145   -1.4    0.6144   17.4
+  conv_width_0.75         213,705   0.7729  0.0069  -0.0192   -1.9    0.6107    9.0
+  lstm_hidden_16           66,785   0.7681  0.0037  -0.0240   -2.3    0.5925    8.7
+
+EQUIVALENT TO THE SELECTED MODEL (within one pooled sd), smallest first
+     161,177  conv_width_0.25      0.7928
+     246,497  center               0.7921
+     256,833  conv_depth_2         0.7865
+     325,137  conv_width_1.5       0.7851
+
+  Smallest indistinguishable architecture: conv_width_0.25 at 161,177 parameters, 1.5x smaller than the selected one.
